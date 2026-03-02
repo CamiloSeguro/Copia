@@ -138,9 +138,9 @@ export function ResourceCard({ resource, availability, selected, onToggle, onOpe
       aria-selected={selected}
     >
       {/* MEDIA */}
-      <div className="relative h-44 bg-eafit-subtle overflow-hidden">
+      <div className="relative h-40 bg-gradient-to-b from-white to-eafit-subtle overflow-hidden flex items-center justify-center p-6">
         {resource.imageUrl ? (
-          <img src={resource.imageUrl} alt={resource.name} className="absolute inset-0 h-full w-full object-cover" />
+          <img src={resource.imageUrl} alt={resource.name} className="max-h-20 w-auto object-contain" />
         ) : (
           <MediaPlaceholder name={resource.name} category={resource.category} />
         )}
@@ -163,13 +163,11 @@ export function ResourceCard({ resource, availability, selected, onToggle, onOpe
   {/* Badge: siempre a la derecha */}
   {selected && (
     <span className="ml-auto shrink-0 inline-flex items-center gap-1 text-[11px] px-2.5 h-7 rounded-pill border border-eafit-secondary bg-eafit-secondary text-white font-medium">
-      <Icons.Check />
       <span className="truncate">En solicitud</span>
     </span>
   )}
 </div>
 
-        {resource.imageUrl && <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/15 to-transparent" />}
       </div>
 
       {/* CONTENT */}

@@ -218,7 +218,7 @@ export function ResourceDetailModal({
                 <span
                   className={[
                     "w-full inline-flex items-center gap-1.5 text-[11px] px-2.5 h-7 rounded-pill border font-medium",
-                    "min-w-0 max-w-[180px]",
+                    "min-w-0 max-w-[80px]",
                     s.cls,
                   ].join(" ")}
                   title={s.text}
@@ -253,9 +253,7 @@ export function ResourceDetailModal({
 
           <div className="grid grid-cols-2 gap-2">
             <Field label="Asset ID" value={r.assetId} />
-            <Field label="Código" value={r.code} />
             <Field label="Estado técnico" value={techLabel} />
-            <Field label="Ubicación" value={r.location} />
           </div>
 
           <div className="ui-card-inner p-4">

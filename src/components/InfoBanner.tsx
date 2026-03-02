@@ -134,7 +134,7 @@ function PolicyModal({ onClose }: { onClose: () => void }) {
             icon={<Icons.Phone />}
             title="Contacto del laboratorio"
             items={[
-              "MediaLab — Bloque 38, piso 2.",
+              "MediaLab — Bloque 38, piso 2 - 201.",
               "Correo: medialab@eafit.edu.co",
               "Para incidencias urgentes, dirígete directamente al laboratorio.",
             ]}
@@ -175,7 +175,7 @@ export function InfoBanner() {
                     <div className="text-sm font-semibold text-eafit-text">Información importante</div>
 
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <InfoPill icon={<Icons.Clock />} label="L–V 8:00–18:00" />
+                      <InfoPill icon={<Icons.Clock />} label="Lunes a Viernes de 8:00–18:00" />
                       <InfoPill icon={<Icons.Shield />} label="No salen del campus" />
                       <InfoPill icon={<Icons.Clock />} label="Máx. 1 día hábil" />
                       <InfoPill icon={<Icons.Phone />} label="medialab@eafit.edu.co" />

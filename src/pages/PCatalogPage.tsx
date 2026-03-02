@@ -14,6 +14,10 @@ type Draft = {
   name: string;
   category: string;
   operationalStatus: ResourceOperationalStatus;
+
+  /** Puede ser URL pública o DataURL base64 */
+  imageUrl: string;
+
   includesText: string;
   description: string;
 };
@@ -29,6 +33,7 @@ const emptyDraft = (): Draft => ({
   name: "",
   category: "",
   operationalStatus: "active",
+  imageUrl: "",
   includesText: "",
   description: "",
 });
@@ -43,6 +48,62 @@ function validateDraft(draft: Draft): FormErrors {
   if (!draft.name.trim()) errors.name = "El nombre es obligatorio.";
   if (!draft.category.trim()) errors.category = "La categoría es obligatoria.";
   return errors;
+}
+
+function readAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Opcional recomendado:
+ * Comprime/redimensiona la imagen para no llenar localStorage.
+ * - maxSide: tamaño máximo del lado mayor
+ * - quality: 0..1 para jpeg/webp
+ * Devuelve DataURL (jpeg).
+ */
+async function compressImageToDataURL(
+  file: File,
+  { maxSide = 1024, quality = 0.82 }: { maxSide?: number; quality?: number } = {}
+): Promise<string> {
+  // Si es muy pequeño, lo devolvemos directo
+  if (file.size <= 220_000) {
+    return readAsDataURL(file);
+  }
+
+  const srcUrl = await readAsDataURL(file);
+
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("No se pudo cargar la imagen"));
+    img.src = srcUrl;
+  });
+
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+
+  if (!w || !h) return srcUrl;
+
+  const scale = Math.min(1, maxSide / Math.max(w, h));
+  const tw = Math.max(1, Math.round(w * scale));
+  const th = Math.max(1, Math.round(h * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = tw;
+  canvas.height = th;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return srcUrl;
+
+  ctx.drawImage(img, 0, 0, tw, th);
+
+  // Guardamos como JPEG (más liviano). Si quieres WebP: "image/webp"
+  return canvas.toDataURL("image/jpeg", quality);
 }
 
 // =========================
@@ -73,6 +134,10 @@ export default function OpsCatalogPage() {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
 
+  // UI/estado del upload
+  const [imgBusy, setImgBusy] = useState(false);
+  const [imgError, setImgError] = useState<string | null>(null);
+
   const editing = useMemo(
     () => resources.find((r) => r.id === editingId) ?? null,
     [editingId, resources]
@@ -82,6 +147,7 @@ export default function OpsCatalogPage() {
     setEditingId(null);
     setDraft(emptyDraft());
     setFormErrors({});
+    setImgError(null);
     setOpenEditor(true);
   }
 
@@ -92,16 +158,20 @@ export default function OpsCatalogPage() {
       name: r.name ?? "",
       category: r.category ?? "",
       operationalStatus: r.operationalStatus ?? "active",
+      imageUrl: r.imageUrl ?? "",
       includesText: (r.includes ?? []).join(", "),
       description: r.description ?? "",
     });
     setFormErrors({});
+    setImgError(null);
     setOpenEditor(true);
   }
 
   function handleClose() {
     setOpenEditor(false);
     setFormErrors({});
+    setImgError(null);
+    setImgBusy(false);
   }
 
   function submit() {
@@ -116,6 +186,10 @@ export default function OpsCatalogPage() {
       name: draft.name.trim(),
       category: draft.category.trim(),
       operationalStatus: draft.operationalStatus,
+
+      // base64 o url pública
+      imageUrl: draft.imageUrl?.trim() || undefined,
+
       includes: toIncludesArray(draft.includesText),
       description: draft.description?.trim() || undefined,
     };
@@ -140,6 +214,22 @@ export default function OpsCatalogPage() {
   function updateField<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((p) => ({ ...p, [key]: value }));
     if (formErrors[key]) setFormErrors((p) => ({ ...p, [key]: undefined }));
+  }
+
+  async function onPickImage(file?: File | null) {
+    if (!file) return;
+    setImgError(null);
+    setImgBusy(true);
+
+    try {
+      // Puedes cambiar a readAsDataURL(file) si NO quieres compresión
+      const dataUrl = await compressImageToDataURL(file, { maxSide: 1200, quality: 0.82 });
+      updateField("imageUrl", dataUrl);
+    } catch {
+      setImgError("No se pudo cargar la imagen. Intenta con otra foto.");
+    } finally {
+      setImgBusy(false);
+    }
   }
 
   return (
@@ -224,13 +314,82 @@ export default function OpsCatalogPage() {
             <button className="ui-btn-ghost h-10" onClick={handleClose} type="button">
               Cancelar
             </button>
-            <button className="ui-btn h-10" onClick={submit} type="button">
-              Guardar
+            <button className="ui-btn h-10" onClick={submit} type="button" disabled={imgBusy}>
+              {imgBusy ? "Procesando…" : "Guardar"}
             </button>
           </div>
         }
       >
         <div className="grid grid-cols-1 gap-3">
+          {/* FOTO */}
+          <div className="grid gap-2">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <div className="text-sm text-eafit-muted">Foto</div>
+              </div>
+
+              {draft.imageUrl ? (
+                <button
+                  type="button"
+                  className="ui-btn-ghost h-9"
+                  onClick={() => updateField("imageUrl", "")}
+                  disabled={imgBusy}
+                >
+                  Quitar
+                </button>
+              ) : null}
+            </div>
+
+            <div className="rounded-card border border-eafit-border bg-eafit-bg p-3">
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                <div className="relative h-24 w-full sm:w-36 rounded-xl overflow-hidden border border-eafit-border bg-white">
+                  {draft.imageUrl ? (
+                    <img
+                      src={draft.imageUrl}
+                      alt="Preview"
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 grid place-items-center text-xs text-eafit-muted">
+                      Sin foto
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <input
+                    className="ui-input h-10 w-full"
+                    placeholder="O pega una URL pública aquí (opcional)"
+                    value={draft.imageUrl}
+                    onChange={(e) => updateField("imageUrl", e.target.value)}
+                    disabled={imgBusy}
+                  />
+
+                  <div className="mt-2 flex items-center gap-2">
+                    <label className="ui-btn-ghost h-9 inline-flex items-center cursor-pointer">
+                      {imgBusy ? "Cargando…" : "Subir archivo"}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/webp"
+                        className="hidden"
+                        onChange={(e) => onPickImage(e.target.files?.[0])}
+                        disabled={imgBusy}
+                      />
+                    </label>
+
+                    <div className="text-xs text-eafit-muted truncate">
+                      Tip: Fotos livianas (&lt; 500KB)
+                    </div>
+                  </div>
+
+                  {imgError ? (
+                    <div className="mt-2 text-xs text-status-danger">{imgError}</div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <label className="grid gap-1">
             <span className="text-sm text-eafit-muted">ID inventario (assetId)</span>
             <input
@@ -241,6 +400,7 @@ export default function OpsCatalogPage() {
               value={draft.assetId}
               onChange={(e) => updateField("assetId", e.target.value)}
               placeholder="MQ3-01, CAM-01…"
+              disabled={imgBusy}
             />
             <FieldError message={formErrors.assetId} />
           </label>
@@ -254,6 +414,7 @@ export default function OpsCatalogPage() {
               ].join(" ")}
               value={draft.name}
               onChange={(e) => updateField("name", e.target.value)}
+              disabled={imgBusy}
             />
             <FieldError message={formErrors.name} />
           </label>
@@ -267,6 +428,7 @@ export default function OpsCatalogPage() {
               ].join(" ")}
               value={draft.category}
               onChange={(e) => updateField("category", e.target.value)}
+              disabled={imgBusy}
             />
             <FieldError message={formErrors.category} />
           </label>
@@ -276,7 +438,10 @@ export default function OpsCatalogPage() {
             <select
               className="ui-input h-10"
               value={draft.operationalStatus}
-              onChange={(e) => updateField("operationalStatus", e.target.value as Draft["operationalStatus"])}
+              onChange={(e) =>
+                updateField("operationalStatus", e.target.value as Draft["operationalStatus"])
+              }
+              disabled={imgBusy}
             >
               <option value="active">Activo</option>
               <option value="maintenance">Mantenimiento</option>
@@ -291,6 +456,7 @@ export default function OpsCatalogPage() {
               placeholder="Cable, cargador, estuche…"
               value={draft.includesText}
               onChange={(e) => updateField("includesText", e.target.value)}
+              disabled={imgBusy}
             />
           </label>
 
@@ -300,6 +466,7 @@ export default function OpsCatalogPage() {
               className="ui-input min-h-[110px] py-2"
               value={draft.description}
               onChange={(e) => updateField("description", e.target.value)}
+              disabled={imgBusy}
             />
           </label>
         </div>

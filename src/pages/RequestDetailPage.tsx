@@ -449,7 +449,9 @@ export default function RequestDetailPage() {
                 Reglas
               </div>
               <div className="text-sm text-eafit-muted mt-2 leading-6">
-                L–V 08:00–18:00 · No salir del campus · Practicante confirma entrega/devolución.
+                Lunes a Viernes de 08:00 am – 18:00 pm 
+                <p>No salir del campus</p>
+                <p>Practicante confirma entrega/devolución</p>
               </div>
             </div>
 

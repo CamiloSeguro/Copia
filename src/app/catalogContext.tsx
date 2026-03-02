@@ -1,3 +1,4 @@
+// src/app/catalogContext.tsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { Resource, ResourceOperationalStatus } from "../types";
@@ -51,6 +52,26 @@ function cleanList(xs?: string[]) {
   return xs?.map((x) => x.trim()).filter(Boolean) ?? [];
 }
 
+function cleanStr(v?: string) {
+  const s = (v ?? "").toString().trim();
+  return s ? s : undefined;
+}
+
+// (Opcional) si tu catálogo crece mucho por imágenes base64, esto ayuda a detectar.
+// Muchos navegadores limitan localStorage ~5MB por dominio.
+function safeSetLocalStorage(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    // Si se llena el storage, al menos no explota la app en silencio.
+    // Puedes cambiar esto por un toast si ya tienes sistema de notificaciones.
+    console.warn(
+      "[CatalogProvider] No se pudo guardar en localStorage. Probablemente excediste el límite (imágenes muy pesadas).",
+      e
+    );
+  }
+}
+
 export function CatalogProvider({
   children,
   initialResources,
@@ -69,7 +90,7 @@ export function CatalogProvider({
   });
 
   useEffect(() => {
-    localStorage.setItem(CATALOG_KEY, JSON.stringify(resources));
+    safeSetLocalStorage(CATALOG_KEY, JSON.stringify(resources));
   }, [resources]);
 
   const value = useMemo<CatalogContextValue>(() => {
@@ -106,13 +127,15 @@ export function CatalogProvider({
         assetId: input.assetId.trim(),
         name: input.name.trim(),
         category: input.category.trim(),
-        operationalStatus: input.operationalStatus ?? input.operationalStatus ?? "active",
+
+        // ✅ FIX: antes estaba duplicado
+        operationalStatus: input.operationalStatus ?? "active",
 
         includes: cleanList(input.includes),
-        imageUrl: input.imageUrl?.trim(),
-        location: input.location?.trim(),
-        code: input.code?.trim(),
-        description: input.description?.trim(),
+        imageUrl: cleanStr(input.imageUrl),
+        location: cleanStr(input.location),
+        code: cleanStr(input.code),
+        description: cleanStr(input.description),
       };
 
       setResources((prev) => [newItem, ...prev]);
@@ -121,21 +144,25 @@ export function CatalogProvider({
 
     const updateResource: CatalogContextValue["updateResource"] = (id, patch) => {
       assertOps();
+
       setResources((prev) =>
         prev.map((r) => {
           if (r.id !== id) return r;
 
           const next: Resource = { ...r, ...patch };
 
-          // normalización mínima
+          // normalización mínima (consistente)
           if (typeof next.assetId === "string") next.assetId = next.assetId.trim();
           if (typeof next.name === "string") next.name = next.name.trim();
           if (typeof next.category === "string") next.category = next.category.trim();
-          if (typeof next.location === "string") next.location = next.location.trim();
-          if (typeof next.code === "string") next.code = next.code.trim();
-          if (typeof next.description === "string") next.description = next.description.trim();
+
+          if (typeof next.location === "string") next.location = cleanStr(next.location);
+          if (typeof next.code === "string") next.code = cleanStr(next.code);
+          if (typeof next.description === "string") next.description = cleanStr(next.description);
+
           if (Array.isArray(next.includes)) next.includes = cleanList(next.includes);
-          if (typeof next.imageUrl === "string") next.imageUrl = next.imageUrl.trim();
+
+          if (typeof next.imageUrl === "string") next.imageUrl = cleanStr(next.imageUrl);
 
           return next;
         })

@@ -122,10 +122,10 @@ interface SectionProps {
   onViewAll?: () => void;
 }
 
-function Section({ title, subtitle, empty, items, onOpen, tone, onViewAll }: SectionProps) {
+function Section({ title, subtitle, empty, items, onOpen, tone }: SectionProps) {
   const m = toneMeta(tone);
   const sliced = items.slice(0, SECTION_MAX_ITEMS);
-  const hasMore = items.length > SECTION_MAX_ITEMS;
+  
 
   return (
     <div className="ui-card overflow-hidden">
@@ -136,14 +136,6 @@ function Section({ title, subtitle, empty, items, onOpen, tone, onViewAll }: Sec
             <div className="font-semibold text-eafit-text">{title}</div>
             <div className="text-sm text-eafit-muted mt-1">{subtitle}</div>
           </div>
-
-          <span
-            className={["inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full border shrink-0", m.pill].join(" ")}
-            title="Cantidad"
-          >
-            <span className={`h-2 w-2 rounded-full ${m.dot}`} aria-hidden />
-            {items.length}
-          </span>
         </div>
       </div>
 
@@ -176,20 +168,6 @@ function Section({ title, subtitle, empty, items, onOpen, tone, onViewAll }: Sec
           ))}
         </div>
       )}
-
-      {/* Section footer */}
-      <div className="px-6 py-4 border-t border-eafit-border text-sm flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <span className="text-eafit-muted">Tip:</span>{" "}
-          <span className="text-eafit-text">abre el ticket para acciones.</span>
-        </div>
-
-        {hasMore && onViewAll && (
-          <button type="button" className="ui-btn-ghost ui-btn-sm shrink-0" onClick={onViewAll}>
-            <span className="ui-btn-label">Ver todo →</span>
-          </button>
-        )}
-      </div>
     </div>
   );
 }
@@ -216,14 +194,8 @@ export default function OpsDashboardPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="min-w-0">
-            <div className="text-2xl font-semibold text-eafit-text">Practicante · Dashboard</div>
-            <div className="text-eafit-muted mt-1">Vista rápida: solo entregas pendientes.</div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="ui-chip ui-chip-on">
-                Pendientes: <b>{pendingDelivery.length}</b>
-              </span>
-            </div>
+            <div className="text-2xl font-semibold text-eafit-text">Panel · Practicante</div>
+            <div className="text-eafit-muted mt-1">Vista rápida: Solo entregas pendientes.</div>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 shrink-0">

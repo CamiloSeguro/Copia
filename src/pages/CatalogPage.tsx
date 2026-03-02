@@ -5,10 +5,10 @@ import { InfoBanner } from "../components/InfoBanner";
 import { FiltersSidebar } from "../components/FiltersSidebar";
 import { ResourceCard } from "../components/ResourceCard";
 import { TicketBar } from "../components/TicketBar";
-import { mockResources } from "../data/mockResources";
 import { useTicket } from "../app/ticketContext";
 import { ResourceDetailModal } from "../components/ResourceDetailModal";
 import { useLoans } from "../app/loansContext";
+import { useCatalog } from "../app/catalogContext";
 import {
   computeResourceAvailability,
   type AvailabilityFilter,
@@ -17,7 +17,7 @@ import {
 } from "../types";
 
 // =========================
-// Utilidades puras (fuera del componente para evitar recreación)
+// Utilidades puras
 // =========================
 
 function normalize(s: unknown): string {
@@ -56,6 +56,7 @@ function canAddFromCatalog(args: {
 
 export default function CatalogPage() {
   const nav = useNavigate();
+  const { resources } = useCatalog(); // ✅ ahora sí: fuente real del catálogo
   const { draft, toggleSelectedId, setSelectedIds } = useTicket();
   const { tickets } = useLoans();
 
@@ -64,8 +65,8 @@ export default function CatalogPage() {
   const qNorm = normalize(q);
 
   const categories = useMemo(
-    () => Array.from(new Set(mockResources.map((r) => r.category))).sort(),
-    []
+    () => Array.from(new Set(resources.map((r) => r.category))).sort(),
+    [resources]
   );
 
   const [selectedCategory, setSelectedCategory] = useState<string | "all">("all");
@@ -74,27 +75,25 @@ export default function CatalogPage() {
   // Disponibilidad calculada por recurso — usa el modelo actual del loansContext
   const availabilityById = useMemo(() => {
     const map = new Map<string, ResourceAvailability>();
-    for (const r of mockResources) {
+    for (const r of resources) {
       map.set(r.id, computeResourceAvailability(r, tickets));
     }
     return map;
-  }, [tickets]);
+  }, [resources, tickets]);
 
-  // ✅ Sanitiza selección cuando cambie disponibilidad (evita que queden "En solicitud" recursos no disponibles)
+  // ✅ Sanitiza selección cuando cambie disponibilidad
   useEffect(() => {
     const allowed = new Set<string>();
-    for (const r of mockResources) {
+    for (const r of resources) {
       if (canAddFromCatalog({ r, availabilityById })) allowed.add(r.id);
     }
     const cleaned = draft.selectedIds.filter((id) => allowed.has(id));
-    if (cleaned.length !== draft.selectedIds.length) {
-      setSelectedIds(cleaned);
-    }
-  }, [availabilityById, draft.selectedIds, setSelectedIds]);
+    if (cleaned.length !== draft.selectedIds.length) setSelectedIds(cleaned);
+  }, [resources, availabilityById, draft.selectedIds, setSelectedIds]);
 
   // Recursos filtrados
   const filtered = useMemo(() => {
-    return mockResources.filter((r) => {
+    return resources.filter((r) => {
       const okCat = selectedCategory === "all" || r.category === selectedCategory;
 
       const avail = availabilityById.get(r.id) ?? "available";
@@ -104,7 +103,7 @@ export default function CatalogPage() {
 
       return okCat && okAvail && okSearch;
     });
-  }, [selectedCategory, selectedAvailability, qNorm, availabilityById]);
+  }, [resources, selectedCategory, selectedAvailability, qNorm, availabilityById]);
 
   const hasActiveFilters =
     selectedCategory !== "all" || selectedAvailability !== "all" || qNorm.length > 0;
@@ -119,11 +118,11 @@ export default function CatalogPage() {
     });
   }
 
-  // Detail modal
+  // Detail modal (✅ derivado desde resources, NO mock)
   const [detailResourceId, setDetailResourceId] = useState<string | null>(null);
   const detailResource = useMemo(
-    () => mockResources.find((x) => x.id === detailResourceId) ?? null,
-    [detailResourceId]
+    () => (detailResourceId ? resources.find((x) => x.id === detailResourceId) ?? null : null),
+    [detailResourceId, resources]
   );
   const detailSelected = !!detailResourceId && draft.selectedIds.includes(detailResourceId);
 
@@ -162,9 +161,7 @@ export default function CatalogPage() {
                   <div className="text-xl font-semibold text-eafit-text">Catálogo</div>
                   <div className="text-sm text-eafit-muted mt-1">
                     {filtered.length} {filtered.length === 1 ? "resultado" : "resultados"}
-                    {hasActiveFilters && (
-                      <span className="text-eafit-muted"> · filtros aplicados</span>
-                    )}
+                    {hasActiveFilters && <span className="text-eafit-muted"> · filtros aplicados</span>}
                   </div>
 
                   {/* Chips de filtros activos */}
@@ -183,11 +180,7 @@ export default function CatalogPage() {
                           Estado: {availabilityLabel(selectedAvailability)}
                         </span>
                       )}
-                      <button
-                        type="button"
-                        className="ui-chip ui-chip-off"
-                        onClick={clearAll}
-                      >
+                      <button type="button" className="ui-chip ui-chip-off" onClick={clearAll}>
                         Limpiar
                       </button>
                     </div>
@@ -236,26 +229,24 @@ export default function CatalogPage() {
       <TicketBar count={draft.selectedIds.length} onGo={() => nav("/solicitud/nueva")} />
 
       <ResourceDetailModal
-  open={!!detailResourceId}
-  onClose={closeDetail}
-  resource={detailResource}
-  availability={
-    detailResourceId ? (availabilityById.get(detailResourceId) ?? "available") : "available"
-  }
-  selected={detailSelected}
-  onToggle={() => {
-    if (!detailResourceId) return;
+        open={!!detailResourceId}
+        onClose={closeDetail}
+        resource={detailResource}
+        availability={detailResourceId ? availabilityById.get(detailResourceId) ?? "available" : "available"}
+        selected={detailSelected}
+        onToggle={() => {
+          if (!detailResourceId) return;
 
-    const r = mockResources.find((x) => x.id === detailResourceId);
-    if (!r) return;
+          const r = resources.find((x) => x.id === detailResourceId);
+          if (!r) return;
 
-    const a = availabilityById.get(r.id) ?? "available";
-    const effective = r.operationalStatus !== "active" ? "maintenance" : a;
-    const canAdd = effective === "available";
+          const a = availabilityById.get(r.id) ?? "available";
+          const effective = r.operationalStatus !== "active" ? "maintenance" : a;
+          const canAdd = effective === "available";
 
-    toggleSelectedId(detailResourceId, { canAdd });
-  }}
-/>
+          toggleSelectedId(detailResourceId, { canAdd });
+        }}
+      />
     </div>
   );
 }
