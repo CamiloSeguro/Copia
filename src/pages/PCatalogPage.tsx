@@ -2,18 +2,20 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Topbar } from "../components/TopBar";
 import { Modal } from "../components/Modal";
-import { useCatalog, type Resource } from "../app/catalogContext";
+import { useCatalog } from "../app/catalogContext";
+import type { Resource, ResourceOperationalStatus } from "../types";
 
 // =========================
 // Types
 // =========================
 
 type Draft = {
+  assetId: string;
   name: string;
   category: string;
-  status: Resource["status"];
+  operationalStatus: ResourceOperationalStatus;
   includesText: string;
-  notes: string;
+  description: string;
 };
 
 type FormErrors = Partial<Record<keyof Draft, string>>;
@@ -23,11 +25,12 @@ type FormErrors = Partial<Record<keyof Draft, string>>;
 // =========================
 
 const emptyDraft = (): Draft => ({
+  assetId: "",
   name: "",
   category: "",
-  status: "available",
+  operationalStatus: "active",
   includesText: "",
-  notes: "",
+  description: "",
 });
 
 function toIncludesArray(text: string): string[] {
@@ -36,6 +39,7 @@ function toIncludesArray(text: string): string[] {
 
 function validateDraft(draft: Draft): FormErrors {
   const errors: FormErrors = {};
+  if (!draft.assetId.trim()) errors.assetId = "El ID de inventario (assetId) es obligatorio.";
   if (!draft.name.trim()) errors.name = "El nombre es obligatorio.";
   if (!draft.category.trim()) errors.category = "La categoría es obligatoria.";
   return errors;
@@ -84,11 +88,12 @@ export default function OpsCatalogPage() {
   function openEdit(r: Resource) {
     setEditingId(r.id);
     setDraft({
+      assetId: r.assetId ?? "",
       name: r.name ?? "",
       category: r.category ?? "",
-      status: r.status ?? "available",
+      operationalStatus: r.operationalStatus ?? "active",
       includesText: (r.includes ?? []).join(", "),
-      notes: r.notes ?? "",
+      description: r.description ?? "",
     });
     setFormErrors({});
     setOpenEditor(true);
@@ -106,12 +111,13 @@ export default function OpsCatalogPage() {
       return;
     }
 
-    const payload = {
+    const payload: Omit<Resource, "id"> = {
+      assetId: draft.assetId.trim(),
       name: draft.name.trim(),
       category: draft.category.trim(),
-      status: draft.status,
+      operationalStatus: draft.operationalStatus,
       includes: toIncludesArray(draft.includesText),
-      notes: draft.notes,
+      description: draft.description?.trim() || undefined,
     };
 
     if (!editingId) createResource(payload);
@@ -133,7 +139,6 @@ export default function OpsCatalogPage() {
 
   function updateField<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((p) => ({ ...p, [key]: value }));
-    // Limpia el error del campo en cuanto el usuario empieza a corregirlo
     if (formErrors[key]) setFormErrors((p) => ({ ...p, [key]: undefined }));
   }
 
@@ -164,7 +169,7 @@ export default function OpsCatalogPage() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <input
               className="ui-input h-10 w-full"
-              placeholder="Buscar por nombre, categoría, incluye…"
+              placeholder="Buscar por nombre, categoría, assetId, incluye…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -179,7 +184,10 @@ export default function OpsCatalogPage() {
               >
                 <div className="min-w-0">
                   <div className="font-semibold text-eafit-text truncate">{r.name}</div>
-                  <div className="text-sm text-eafit-muted">{r.category}</div>
+                  <div className="text-sm text-eafit-muted">
+                    {r.category} · <span className="font-medium text-eafit-text/70">{r.assetId}</span>
+                  </div>
+
                   {r.includes?.length ? (
                     <div className="text-xs text-eafit-muted mt-2 line-clamp-1">
                       <span className="font-semibold text-eafit-text/70">Incluye:</span>{" "}
@@ -224,6 +232,20 @@ export default function OpsCatalogPage() {
       >
         <div className="grid grid-cols-1 gap-3">
           <label className="grid gap-1">
+            <span className="text-sm text-eafit-muted">ID inventario (assetId)</span>
+            <input
+              className={[
+                "ui-input h-10",
+                formErrors.assetId ? "border-status-danger focus:ring-status-danger/20" : "",
+              ].join(" ")}
+              value={draft.assetId}
+              onChange={(e) => updateField("assetId", e.target.value)}
+              placeholder="MQ3-01, CAM-01…"
+            />
+            <FieldError message={formErrors.assetId} />
+          </label>
+
+          <label className="grid gap-1">
             <span className="text-sm text-eafit-muted">Nombre</span>
             <input
               className={[
@@ -250,15 +272,15 @@ export default function OpsCatalogPage() {
           </label>
 
           <label className="grid gap-1">
-            <span className="text-sm text-eafit-muted">Estado</span>
+            <span className="text-sm text-eafit-muted">Estado operativo</span>
             <select
               className="ui-input h-10"
-              value={draft.status}
-              onChange={(e) => updateField("status", e.target.value as Draft["status"])}
+              value={draft.operationalStatus}
+              onChange={(e) => updateField("operationalStatus", e.target.value as Draft["operationalStatus"])}
             >
-              <option value="available">Disponible</option>
-              <option value="loaned">Prestado</option>
+              <option value="active">Activo</option>
               <option value="maintenance">Mantenimiento</option>
+              <option value="retired">Retirado</option>
             </select>
           </label>
 
@@ -273,11 +295,11 @@ export default function OpsCatalogPage() {
           </label>
 
           <label className="grid gap-1">
-            <span className="text-sm text-eafit-muted">Notas</span>
+            <span className="text-sm text-eafit-muted">Descripción</span>
             <textarea
               className="ui-input min-h-[110px] py-2"
-              value={draft.notes}
-              onChange={(e) => updateField("notes", e.target.value)}
+              value={draft.description}
+              onChange={(e) => updateField("description", e.target.value)}
             />
           </label>
         </div>
