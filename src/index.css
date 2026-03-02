@@ -1,0 +1,195 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* =========================
+   Base (sobrio)
+   ========================= */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: geometricPrecision;
+  }
+
+  body {
+    @apply bg-eafit-bg text-eafit-text;
+  }
+
+  ::selection {
+    background: rgba(0, 169, 224, 0.18);
+  }
+}
+
+/* =========================
+   UI System (reusables)
+   ========================= */
+@layer components {
+  /* ---------- Surfaces ---------- */
+  .ui-card {
+    @apply rounded-card bg-eafit-surface border border-eafit-border shadow-soft;
+  }
+
+  .ui-card-hover {
+    @apply transition;
+  }
+  .ui-card-hover:hover {
+    box-shadow: 0 12px 28px rgba(17, 24, 39, 0.10);
+  }
+
+  .ui-card-inner {
+    @apply rounded-card bg-eafit-subtle border border-eafit-border;
+  }
+
+  /* Consistent spacing helpers */
+  .ui-section {
+    @apply ui-card p-6;
+  }
+  .ui-stack {
+    @apply flex flex-col gap-4;
+  }
+
+  /* ---------- Typography ---------- */
+  .ui-title {
+    @apply font-semibold text-eafit-text;
+  }
+  .ui-muted {
+    @apply text-eafit-muted;
+  }
+
+  /* ---------- Inputs ---------- */
+  .ui-input {
+    @apply h-11 w-full rounded-input border border-eafit-border bg-eafit-bg px-4 outline-none;
+  }
+  .ui-input:focus {
+    @apply ring-2 ring-eafit-secondary/20 border-eafit-secondary/30;
+  }
+
+  /* ---------- Buttons (sobrio, robusto) ---------- */
+  .ui-btn {
+    @apply inline-flex items-center justify-center gap-2 h-11 px-4 rounded-btn font-semibold transition
+           border border-transparent select-none;
+    line-height: 1.1;      /* ✅ FIX: evita recortes/overflow raro */
+    min-width: 0;          /* ✅ permite truncar dentro */
+    overflow: hidden;      /* ✅ FIX: nada se sale del botón */
+  }
+
+  .ui-btn:focus-visible {
+    @apply ring-2 ring-eafit-secondary/25;
+  }
+
+  /* sizes */
+  .ui-btn-lg {
+    @apply h-12 px-5;
+  }
+  .ui-btn-sm {
+    @apply h-10 px-3 text-sm;
+  }
+
+  /* full width */
+  .ui-btn-block {
+    @apply w-full;
+  }
+
+  /* no wrap */
+  .ui-btn-nowrap {
+    white-space: nowrap;
+  }
+
+  /* ✅ label truncable (úsalo dentro de botones) */
+  .ui-btn-label {
+    @apply min-w-0 truncate;
+  }
+
+  /* ✅ label multilínea (para botones pequeños en cards) */
+.ui-btn-label-wrap{
+  @apply min-w-0 text-center whitespace-normal break-words;
+  line-height: 1.15;
+}
+
+  .ui-btn-primary {
+    @apply ui-btn bg-eafit-primary text-white;
+  }
+  .ui-btn-primary:hover {
+    @apply opacity-95;
+  }
+
+  .ui-btn-secondary {
+    @apply ui-btn bg-eafit-secondary text-white;
+  }
+  .ui-btn-secondary:hover {
+    @apply opacity-95;
+  }
+
+  .ui-btn-ghost {
+    @apply ui-btn border border-eafit-border bg-eafit-surface text-eafit-text;
+  }
+  .ui-btn-ghost:hover {
+    @apply bg-eafit-bg;
+  }
+
+  .ui-btn-danger {
+    @apply ui-btn bg-status-danger text-white;
+  }
+  .ui-btn-danger:hover {
+    @apply opacity-95;
+  }
+
+  .ui-btn-disabled {
+    @apply ui-btn border border-eafit-border bg-eafit-bg text-eafit-muted cursor-not-allowed;
+  }
+
+  /* ---------- Chips ---------- */
+  .ui-chip {
+    @apply inline-flex items-center gap-2 px-3 py-1 rounded-pill border text-xs font-semibold transition;
+    line-height: 1;
+  }
+
+  .ui-chip-on {
+    @apply bg-eafit-secondary/10 text-eafit-text border-eafit-secondary/20;
+  }
+
+  .ui-chip-off {
+    @apply bg-eafit-surface text-eafit-muted border-eafit-border;
+  }
+  .ui-chip-off:hover {
+    @apply bg-eafit-bg text-eafit-text;
+  }
+
+  .ui-chip-static {
+    @apply text-xs px-3 py-1 rounded-pill border border-eafit-border bg-eafit-surface text-eafit-muted;
+  }
+
+  /* ---------- Dividers ---------- */
+  .ui-divider {
+    @apply border-t border-eafit-border;
+  }
+}
+
+/* =========================
+   Optional: nicer scrollbars (desktop)
+   ========================= */
+@layer utilities {
+  .scroll-soft::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .scroll-soft::-webkit-scrollbar-thumb {
+    background: rgba(17, 24, 39, 0.12);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  .scroll-soft::-webkit-scrollbar-thumb:hover {
+    background: rgba(17, 24, 39, 0.18);
+  }
+  .scroll-soft::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
