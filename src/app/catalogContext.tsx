@@ -1,31 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
+import type { Resource, ResourceOperationalStatus } from "../types";
 
-/** Estado interno del catálogo */
-export type ResourceStatus = "available" | "loaned" | "maintenance";
-
-export type Resource = {
-  id: string;
-  name: string;
-  category: string;
-  status: ResourceStatus;
-
-  // opcionales (mantén solo lo que uses en UI)
-  location?: string;
-  brand?: string;
-  model?: string;
-  serial?: string;
-  includes?: string[];
-  notes?: string;
-  imageUrl?: string;
-  tags?: string[];
-
-  updatedAtISO?: string;
-  createdAtISO?: string;
-};
-
-export type ResourceCreateInput = Omit<Resource, "id" | "createdAtISO" | "updatedAtISO" | "status"> & {
-  status?: ResourceStatus;
+/** Input para crear un recurso (id lo genera el sistema). */
+export type ResourceCreateInput = Omit<Resource, "id"> & {
+  operationalStatus?: ResourceOperationalStatus;
 };
 
 type CatalogContextValue = {
@@ -37,7 +16,7 @@ type CatalogContextValue = {
   canManage: boolean;
 
   createResource: (input: ResourceCreateInput) => Resource;
-  updateResource: (id: string, patch: Partial<Omit<Resource, "id" | "createdAtISO">>) => void;
+  updateResource: (id: string, patch: Partial<Omit<Resource, "id">>) => void;
   deleteResource: (id: string) => void;
 
   setAll: (next: Resource[]) => void;
@@ -49,10 +28,6 @@ const CATALOG_KEY = "eafit_catalog_v1";
 
 function uid(prefix = "res") {
   return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now().toString(16)}`;
-}
-
-function nowISO() {
-  return new Date().toISOString();
 }
 
 function safeParse<T>(raw: string | null, fallback: T): T {
@@ -112,12 +87,11 @@ export function CatalogProvider({
         const hay = [
           r.name,
           r.category,
+          r.assetId,
           r.location ?? "",
-          r.brand ?? "",
-          r.model ?? "",
-          r.serial ?? "",
+          r.code ?? "",
+          r.description ?? "",
           ...(r.includes ?? []),
-          ...(r.tags ?? []),
         ].join(" ");
 
         return norm(hay).includes(nq);
@@ -126,26 +100,19 @@ export function CatalogProvider({
 
     const createResource: CatalogContextValue["createResource"] = (input) => {
       assertOps();
-      const t = nowISO();
 
       const newItem: Resource = {
         id: uid("res"),
-        createdAtISO: t,
-        updatedAtISO: t,
-
+        assetId: input.assetId.trim(),
         name: input.name.trim(),
         category: input.category.trim(),
-        status: input.status ?? "available",
-
-        location: input.location?.trim(),
-        brand: input.brand?.trim(),
-        model: input.model?.trim(),
-        serial: input.serial?.trim(),
-        notes: input.notes?.trim(),
-        imageUrl: input.imageUrl?.trim(),
+        operationalStatus: input.operationalStatus ?? input.operationalStatus ?? "active",
 
         includes: cleanList(input.includes),
-        tags: cleanList(input.tags),
+        imageUrl: input.imageUrl?.trim(),
+        location: input.location?.trim(),
+        code: input.code?.trim(),
+        description: input.description?.trim(),
       };
 
       setResources((prev) => [newItem, ...prev]);
@@ -158,23 +125,17 @@ export function CatalogProvider({
         prev.map((r) => {
           if (r.id !== id) return r;
 
-          const next: Resource = {
-            ...r,
-            ...patch,
-            updatedAtISO: nowISO(),
-          };
+          const next: Resource = { ...r, ...patch };
 
           // normalización mínima
+          if (typeof next.assetId === "string") next.assetId = next.assetId.trim();
           if (typeof next.name === "string") next.name = next.name.trim();
           if (typeof next.category === "string") next.category = next.category.trim();
           if (typeof next.location === "string") next.location = next.location.trim();
-          if (typeof next.brand === "string") next.brand = next.brand.trim();
-          if (typeof next.model === "string") next.model = next.model.trim();
-          if (typeof next.serial === "string") next.serial = next.serial.trim();
-          if (typeof next.notes === "string") next.notes = next.notes.trim();
-          if (typeof next.imageUrl === "string") next.imageUrl = next.imageUrl.trim();
+          if (typeof next.code === "string") next.code = next.code.trim();
+          if (typeof next.description === "string") next.description = next.description.trim();
           if (Array.isArray(next.includes)) next.includes = cleanList(next.includes);
-          if (Array.isArray(next.tags)) next.tags = cleanList(next.tags);
+          if (typeof next.imageUrl === "string") next.imageUrl = next.imageUrl.trim();
 
           return next;
         })
