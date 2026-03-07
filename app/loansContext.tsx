@@ -7,6 +7,7 @@ export type TicketStatus = "pending_delivery" | "delivered" | "returned" | "canc
 export type TicketItem = {
   id: string;
   resourceId: string;
+  quantity: number;
   status: "pending" | "delivered" | "returned" | "cancelled";
   deliveredAtISO?: string;
   dueAtISO?: string;        // ✅ propiedad (opcional)
@@ -103,6 +104,7 @@ export function LoansProvider({ children }: { children: React.ReactNode }) {
       items: draft.selectedIds.map((resourceId) => ({
         id: uid("item"),
         resourceId,
+        quantity: draft.quantities?.[resourceId] ?? 1,
         status: "pending",
       })),
     };

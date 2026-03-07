@@ -8,11 +8,8 @@ export type UserRecord = {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   role: UserRole;
-
-  banned: boolean;
-  banReason?: string;
-  bannedAtISO?: string;
 
   createdAtISO: string;
   updatedAtISO: string;
@@ -21,9 +18,8 @@ export type UserRecord = {
 export type UserCreateInput = {
   name: string;
   email: string;
+  phone?: string;
   role: UserRole;
-  banned?: boolean;
-  banReason?: string;
 };
 
 type UsersContextValue = {
@@ -71,11 +67,6 @@ const norm = (s: string) =>
     .replace(/\p{Diacritic}/gu, "")
     .trim();
 
-function cleanStr(v?: string) {
-  const s = (v ?? "").toString().trim();
-  return s ? s : undefined;
-}
-
 function safeSetLocalStorage(key: string, value: string) {
   try {
     localStorage.setItem(key, value);
@@ -122,9 +113,7 @@ export function UsersProvider({
       if (!nq) return users;
 
       return users.filter((u) => {
-        const hay = [u.name, u.email, u.role, u.banned ? "vetado" : "activo", u.banReason ?? ""].join(
-          " "
-        );
+        const hay = [u.name, u.email, u.role].join(" ");
         return norm(hay).includes(nq);
       });
     };
@@ -133,16 +122,13 @@ export function UsersProvider({
       assertOps();
 
       const t = nowISO();
-      const banned = Boolean(input.banned);
 
       const next: UserRecord = {
         id: uid("usr"),
         name: input.name.trim(),
         email: input.email.trim(),
+        phone: input.phone?.trim() || undefined,
         role: input.role,
-        banned,
-        banReason: banned ? cleanStr(input.banReason) : undefined,
-        bannedAtISO: banned ? t : undefined,
         createdAtISO: t,
         updatedAtISO: t,
       };
@@ -177,8 +163,6 @@ export function UsersProvider({
 
           next.name = next.name?.trim?.() ?? u.name;
           next.email = next.email?.trim?.() ?? u.email;
-          next.banReason = next.banned ? cleanStr(next.banReason) : undefined;
-          next.bannedAtISO = next.banned ? next.bannedAtISO ?? t : undefined;
           next.updatedAtISO = t;
 
           return next;

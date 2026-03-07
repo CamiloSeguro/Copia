@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLoans, type Ticket } from "../app/loansContext";
+import { useCatalog } from "../app/catalogContext";
 import { Topbar } from "../components/TopBar";
 
 // =========================
@@ -106,6 +107,12 @@ const Icons = {
 export default function MyRequestsPage() {
   const nav = useNavigate();
   const { tickets } = useLoans();
+  const { resources } = useCatalog();
+
+  const resourceMap = useMemo(
+    () => new Map(resources.map((r) => [r.id, r])),
+    [resources]
+  );
 
   const [sp, setSp] = useSearchParams();
   const q = sp.get("q") ?? "";
@@ -135,12 +142,14 @@ export default function MyRequestsPage() {
 
   const ordered = useMemo(
     () =>
-      [...tickets].sort((a, b) => {
-        const wa = statusMeta(a.status).weight;
-        const wb = statusMeta(b.status).weight;
-        if (wb !== wa) return wb - wa;
-        return new Date(b.createdAtISO ?? 0).getTime() - new Date(a.createdAtISO ?? 0).getTime();
-      }),
+      tickets
+        .filter((t) => t.status !== "cancelled")
+        .sort((a, b) => {
+          const wa = statusMeta(a.status).weight;
+          const wb = statusMeta(b.status).weight;
+          if (wb !== wa) return wb - wa;
+          return new Date(b.createdAtISO ?? 0).getTime() - new Date(a.createdAtISO ?? 0).getTime();
+        }),
     [tickets]
   );
 
@@ -170,8 +179,9 @@ export default function MyRequestsPage() {
   }, [ordered, q, filter]);
 
   const counts = useMemo(() => {
-    const total = tickets.length;
-    const active = tickets.filter((t) => isActiveStatus(t.status)).length;
+    const visible = tickets.filter((t) => t.status !== "cancelled");
+    const total = visible.length;
+    const active = visible.filter((t) => isActiveStatus(t.status)).length;
     return {
       total,
       active,
@@ -266,26 +276,36 @@ export default function MyRequestsPage() {
           </div>
 
           {tickets.length === 0 ? (
-            <div className="p-8">
-              <div className="text-lg font-semibold text-eafit-text">Aún no tienes solicitudes</div>
-              <div className="text-sm text-eafit-muted mt-1">
-                Ve al catálogo para seleccionar recursos y crear una solicitud.
+            <div className="p-10 flex flex-col items-center text-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-eafit-subtle border border-eafit-border text-eafit-muted">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+                  <path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
               </div>
-              <div className="mt-4">
-                <button className="ui-btn-primary" type="button" onClick={() => nav("/")}>
-                  <span className="ui-btn-label">Ir al catálogo</span>
-                </button>
+              <div>
+                <div className="text-base font-semibold text-eafit-text">Aún no tienes solicitudes</div>
+                <div className="text-sm text-eafit-muted mt-1">Ve al catálogo para seleccionar recursos y crear una solicitud.</div>
               </div>
+              <button className="ui-btn-primary ui-btn-sm mt-1" type="button" onClick={() => nav("/")}>
+                <span className="ui-btn-label">Ir al catálogo</span>
+              </button>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="p-8">
-              <div className="text-lg font-semibold text-eafit-text">Sin resultados</div>
-              <div className="text-sm text-eafit-muted mt-1">Prueba con otro término o ajusta los filtros.</div>
-              <div className="mt-4">
-                <button className="ui-btn-ghost" type="button" onClick={clearFilters}>
-                  <span className="ui-btn-label">Limpiar búsqueda</span>
-                </button>
+            <div className="p-10 flex flex-col items-center text-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-eafit-subtle border border-eafit-border text-eafit-muted">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="1.8"/>
+                  <path d="M16.5 16.5 21 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
               </div>
+              <div>
+                <div className="text-base font-semibold text-eafit-text">Sin resultados</div>
+                <div className="text-sm text-eafit-muted mt-1">Prueba con otro término o ajusta los filtros.</div>
+              </div>
+              <button className="ui-btn-ghost ui-btn-sm mt-1" type="button" onClick={clearFilters}>
+                <span className="ui-btn-label">Limpiar búsqueda</span>
+              </button>
             </div>
           ) : (
             <div className="divide-y divide-eafit-border">
@@ -309,7 +329,14 @@ export default function MyRequestsPage() {
                           </span>
                         </div>
                         <div className="text-sm text-eafit-muted mt-1">
-                          Inmediato · Ítems: {t.items?.length ?? 0}
+                          {(() => {
+                            const names = (t.items ?? [])
+                              .map((it) => resourceMap.get(it.resourceId)?.name)
+                              .filter(Boolean);
+                            const preview = names.slice(0, 2).join(", ");
+                            const extra = names.length > 2 ? ` +${names.length - 2}` : "";
+                            return names.length > 0 ? `${preview}${extra}` : `Inmediato · ${t.items?.length ?? 0} ítem(s)`;
+                          })()}
                         </div>
                       </div>
 

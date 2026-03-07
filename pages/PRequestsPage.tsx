@@ -49,7 +49,7 @@ const STATUS_META: Record<Tab, StatusMeta> = {
   },
 };
 
-const TABS: Tab[] = ["pending_delivery", "delivered", "returned", "cancelled"];
+const TABS: Tab[] = ["pending_delivery", "delivered", "returned"];
 
 // =========================
 // Helpers
@@ -276,7 +276,12 @@ export default function OpsRequestsPage() {
                           <div className="text-xs text-eafit-muted">ID: {t.id}</div>
                         </td>
 
-                        <td className="px-6 py-4 text-eafit-muted">{t.items.length}</td>
+                        <td className="px-6 py-4 text-eafit-muted">
+                          <div>{t.items.length} tipo(s)</div>
+                          <div className="text-xs">
+                            {t.items.reduce((sum, it) => sum + (it.quantity ?? 1), 0)} ud.
+                          </div>
+                        </td>
 
                         <td className="px-6 py-4 text-eafit-muted">{fmtStart(t)}</td>
 

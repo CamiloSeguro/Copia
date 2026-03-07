@@ -19,8 +19,8 @@ type AuthState = {
   token: string | null;
   user: User | null;
   isAuthed: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  login: (emailOrPhone: string, password: string) => Promise<void>;
+  register: (email: string, password: string, phone?: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -43,10 +43,8 @@ type DirUser = {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   role: UserRole;
-  banned: boolean;
-  banReason?: string;
-  bannedAtISO?: string;
   createdAtISO?: string;
   updatedAtISO?: string;
 };
@@ -130,8 +128,14 @@ function findDirUserByEmail(email: string): DirUser | undefined {
   return loadUserDirectory().find((u) => normEmail(u.email) === e);
 }
 
+function findDirUserByPhone(phone: string): DirUser | undefined {
+  const p = phone.trim();
+  if (!p) return undefined;
+  return loadUserDirectory().find((u) => u.phone?.trim() === p);
+}
+
 /** Crea o actualiza el directorio para que admin pueda gestionar */
-function upsertDirUser(input: { id: string; name: string; email: string; role: UserRole }) {
+function upsertDirUser(input: { id: string; name: string; email: string; role: UserRole; phone?: string }) {
   const t = nowISO();
   const dir = loadUserDirectory();
   const e = normEmail(input.email);
@@ -145,12 +149,9 @@ function upsertDirUser(input: { id: string; name: string; email: string; role: U
       name: input.name.trim(),
       email: e,
       role: input.role,
+      phone: input.phone?.trim() || prev.phone,
       updatedAtISO: t,
       createdAtISO: prev.createdAtISO ?? t,
-      // mantiene banned/banReason si ya existían
-      banned: Boolean(prev.banned),
-      banReason: prev.banReason,
-      bannedAtISO: prev.bannedAtISO,
     };
   } else {
     dir.unshift({
@@ -158,7 +159,7 @@ function upsertDirUser(input: { id: string; name: string; email: string; role: U
       name: input.name.trim(),
       email: e,
       role: input.role,
-      banned: false,
+      phone: input.phone?.trim() || undefined,
       createdAtISO: t,
       updatedAtISO: t,
     });
@@ -178,18 +179,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAuthed = Boolean(token && user);
 
-  async function login(email: string, password: string) {
-    const entry = findUserByEmail(email);
-    if (!entry || entry.password !== password) throw new Error("Correo o contraseña incorrectos");
-
-    // ✅ Si existe en directorio, manda el veto y los datos “oficiales”
-    const dirUser = findDirUserByEmail(entry.email);
-    if (dirUser?.banned) {
-      const reason = dirUser.banReason?.trim();
-      throw new Error(reason ? `Usuario vetado: ${reason}` : "Usuario vetado.");
+  async function login(emailOrPhone: string, password: string) {
+    // Busca primero por email; si no encuentra, intenta por celular
+    let entry = findUserByEmail(emailOrPhone);
+    if (!entry) {
+      const byPhone = findDirUserByPhone(emailOrPhone);
+      if (byPhone) entry = findUserByEmail(byPhone.email);
     }
+    if (!entry || entry.password !== password) throw new Error("Correo, celular o contraseña incorrectos");
 
     // ✅ Usa name/role del directorio si existen (admin manda)
+    const dirUser = findDirUserByEmail(entry.email);
     const nextUser: User = {
       id: entry.id,
       name: dirUser?.name?.trim() || entry.name,
@@ -206,16 +206,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   // ✅ Register hace auto-login y también crea el registro en directorio
-  async function register(email: string, password: string) {
+  async function register(email: string, password: string, phone?: string) {
     const normalized = normEmail(email);
     if (findUserByEmail(normalized)) throw new Error("Ya existe una cuenta con este correo.");
-
-    // Si el directorio lo tiene vetado por email, no dejes registrar
-    const dirUser = findDirUserByEmail(normalized);
-    if (dirUser?.banned) {
-      const reason = dirUser.banReason?.trim();
-      throw new Error(reason ? `No puedes registrarte: ${reason}` : "No puedes registrarte: usuario vetado.");
-    }
 
     const newStored: StoredUser = {
       id: `reg_${Date.now()}`,
@@ -228,15 +221,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     saveRegisteredUsers([...loadRegisteredUsers(), newStored]);
 
+    const existingDir = findDirUserByEmail(normalized);
     const nextUser: User = {
       id: newStored.id,
-      name: dirUser?.name?.trim() || newStored.name,
+      name: existingDir?.name?.trim() || newStored.name,
       email: newStored.email,
-      role: dirUser?.role || newStored.role,
+      role: existingDir?.role || newStored.role,
     };
 
-    // ✅ crea/actualiza el registro administrable
-    upsertDirUser(nextUser);
+    // ✅ crea/actualiza el registro administrable (incluye celular)
+    upsertDirUser({ ...nextUser, phone });
 
     setToken(newStored.token);
     setUser(nextUser);

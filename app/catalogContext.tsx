@@ -111,7 +111,6 @@ export function CatalogProvider({
           r.assetId,
           r.location ?? "",
           r.code ?? "",
-          r.description ?? "",
           ...(r.includes ?? []),
         ].join(" ");
 
@@ -135,7 +134,6 @@ export function CatalogProvider({
         imageUrl: cleanStr(input.imageUrl),
         location: cleanStr(input.location),
         code: cleanStr(input.code),
-        description: cleanStr(input.description),
       };
 
       setResources((prev) => [newItem, ...prev]);
@@ -158,8 +156,6 @@ export function CatalogProvider({
 
           if (typeof next.location === "string") next.location = cleanStr(next.location);
           if (typeof next.code === "string") next.code = cleanStr(next.code);
-          if (typeof next.description === "string") next.description = cleanStr(next.description);
-
           if (Array.isArray(next.includes)) next.includes = cleanList(next.includes);
 
           if (typeof next.imageUrl === "string") next.imageUrl = cleanStr(next.imageUrl);

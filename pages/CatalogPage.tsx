@@ -34,15 +34,12 @@ function availabilityLabel(v: AvailabilityFilter): string {
     all: "Todas",
     available: "Disponible",
     in_use: "En uso",
-    maintenance: "Mantenimiento",
   };
   return labels[v];
 }
 
 function canAddFromCatalog(r: Resource, availabilityById: Map<string, ResourceAvailability>): boolean {
-  const a = availabilityById.get(r.id) ?? "available";
-  const effective: ResourceAvailability = r.operationalStatus !== "active" ? "maintenance" : a;
-  return effective === "available";
+  return (availabilityById.get(r.id) ?? "available") === "available";
 }
 
 // =========================
@@ -90,8 +87,9 @@ export default function CatalogPage() {
 
   const filtered = useMemo(() => {
     return resources.filter((r) => {
-      const okCat = selectedCategory === "all" || r.category === selectedCategory;
+      if (r.operationalStatus !== "active") return false;
       const avail = availabilityById.get(r.id) ?? "available";
+      const okCat = selectedCategory === "all" || r.category === selectedCategory;
       const okAvail = selectedAvailability === "all" || avail === selectedAvailability;
       const okSearch = !searchQueryNorm || resourceHaystack(r).includes(searchQueryNorm);
       return okCat && okAvail && okSearch;
@@ -100,6 +98,17 @@ export default function CatalogPage() {
 
   const hasActiveFilters =
     selectedCategory !== "all" || selectedAvailability !== "all" || searchQueryNorm.length > 0;
+
+  const availabilityCounts = useMemo(() => {
+    let available = 0;
+    let inUse = 0;
+    for (const r of resources) {
+      if (r.operationalStatus !== "active") continue;
+      if ((availabilityById.get(r.id) ?? "available") === "available") available++;
+      else inUse++;
+    }
+    return { available, inUse };
+  }, [resources, availabilityById]);
 
   function clearAll() {
     setSelectedCategory("all");
@@ -144,8 +153,22 @@ export default function CatalogPage() {
                 <div className="min-w-0">
                   <div className="text-xl font-semibold text-eafit-text">Catálogo</div>
                   <div className="text-sm text-eafit-muted mt-1">
-                    {filtered.length} {filtered.length === 1 ? "resultado" : "resultados"}
-                    {hasActiveFilters && <span className="text-eafit-muted"> · filtros aplicados</span>}
+                    {hasActiveFilters ? (
+                      <>{filtered.length} {filtered.length === 1 ? "resultado" : "resultados"} · filtros aplicados</>
+                    ) : (
+                      <>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-status-success" aria-hidden />
+                          {availabilityCounts.available} disponible{availabilityCounts.available !== 1 ? "s" : ""}
+                        </span>
+                        {availabilityCounts.inUse > 0 && (
+                          <span className="ml-3 inline-flex items-center gap-1.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-status-warning" aria-hidden />
+                            {availabilityCounts.inUse} en uso
+                          </span>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   {/* Chips de filtros activos */}
@@ -175,16 +198,21 @@ export default function CatalogPage() {
 
             {/* Grid o estado vacío */}
             {filtered.length === 0 ? (
-              <div className="ui-card p-8">
-                <div className="text-lg font-semibold text-eafit-text">Sin resultados</div>
-                <div className="text-sm text-eafit-muted mt-1">
-                  Prueba otra búsqueda (Ctrl+K) o limpia los filtros.
+              <div className="ui-card p-10 flex flex-col items-center text-center gap-3">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-eafit-subtle border border-eafit-border text-eafit-muted">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="1.8"/>
+                    <path d="M16.5 16.5 21 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                    <path d="M8 10.5h5M10.5 8v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  </svg>
                 </div>
-                <div className="mt-4">
-                  <button className="ui-btn-primary" type="button" onClick={clearAll}>
-                    <span className="ui-btn-label">Limpiar filtros</span>
-                  </button>
+                <div>
+                  <div className="text-base font-semibold text-eafit-text">Sin resultados</div>
+                  <div className="text-sm text-eafit-muted mt-1">Prueba otra búsqueda (Ctrl+K) o limpia los filtros.</div>
                 </div>
+                <button className="ui-btn-primary ui-btn-sm mt-1" type="button" onClick={clearAll}>
+                  <span className="ui-btn-label">Limpiar filtros</span>
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6 xl:gap-7">

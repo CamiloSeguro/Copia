@@ -30,6 +30,6 @@ export const mockResources: Resource[] = [
     assetId: "ANI-01",
     name: "Mesa de animación",
     category: "Animación",
-    operationalStatus: "maintenance",
+    operationalStatus: "active",
   },
 ];

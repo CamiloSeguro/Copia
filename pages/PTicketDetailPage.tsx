@@ -202,7 +202,9 @@ export default function OpsTicketDetailPage() {
 
               <span className="ui-chip ui-chip-off">Inmediato</span>
 
-              <span className="ui-chip ui-chip-off">Ítems: {ticket.items.length}</span>
+              <span className="ui-chip ui-chip-off">
+                {ticket.items.length} tipo(s) · {ticket.items.reduce((sum, it) => sum + (it.quantity ?? 1), 0)} ud.
+              </span>
 
               <span className="ui-chip ui-chip-off">Fecha/Hora: {fmtStart(ticket)}</span>
             </div>
@@ -240,6 +242,9 @@ export default function OpsTicketDetailPage() {
                         </div>
                         <div className="text-sm text-eafit-muted">
                           {r?.category ?? "Puede haber sido eliminado del catálogo"}
+                        </div>
+                        <div className="text-xs text-eafit-muted mt-1">
+                          Cantidad: <span className="font-medium text-eafit-text">{it.quantity ?? 1}</span>
                         </div>
 
                         {it.deliveredAtISO ? (

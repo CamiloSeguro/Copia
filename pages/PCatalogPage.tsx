@@ -18,8 +18,9 @@ type Draft = {
   /** Puede ser URL pública o DataURL base64 */
   imageUrl: string;
 
+  location: string;
+  purchaseDate: string;
   includesText: string;
-  description: string;
 };
 
 type FormErrors = Partial<Record<keyof Draft, string>>;
@@ -34,8 +35,9 @@ const emptyDraft = (): Draft => ({
   category: "",
   operationalStatus: "active",
   imageUrl: "",
+  location: "",
+  purchaseDate: "",
   includesText: "",
-  description: "",
 });
 
 function toIncludesArray(text: string): string[] {
@@ -179,8 +181,9 @@ export default function OpsCatalogPage() {
       category: r.category ?? "",
       operationalStatus: r.operationalStatus ?? "active",
       imageUrl: r.imageUrl ?? "",
+      location: r.location ?? "",
+      purchaseDate: r.purchaseDate ?? "",
       includesText: (r.includes ?? []).join(", "),
-      description: r.description ?? "",
     });
     setFormErrors({});
     setImgError(null);
@@ -210,8 +213,9 @@ export default function OpsCatalogPage() {
       // base64 o url pública
       imageUrl: draft.imageUrl?.trim() || undefined,
 
+      location: draft.location?.trim() || undefined,
+      purchaseDate: draft.purchaseDate?.trim() || undefined,
       includes: toIncludesArray(draft.includesText),
-      description: draft.description?.trim() || undefined,
     };
 
     if (!editingId) createResource(payload);
@@ -471,9 +475,30 @@ export default function OpsCatalogPage() {
               disabled={imgBusy}
             >
               <option value="active">Activo</option>
-              <option value="maintenance">Mantenimiento</option>
               <option value="retired">Retirado</option>
             </select>
+          </label>
+
+          <label className="grid gap-1">
+            <span className="text-sm text-eafit-muted">Ubicación</span>
+            <input
+              className="ui-input h-10"
+              placeholder="Estante A, Cajón 3, Sala de equipos…"
+              value={draft.location}
+              onChange={(e) => updateField("location", e.target.value)}
+              disabled={imgBusy}
+            />
+          </label>
+
+          <label className="grid gap-1">
+            <span className="text-sm text-eafit-muted">Fecha de compra</span>
+            <input
+              type="date"
+              className="ui-input h-10"
+              value={draft.purchaseDate}
+              onChange={(e) => updateField("purchaseDate", e.target.value)}
+              disabled={imgBusy}
+            />
           </label>
 
           <label className="grid gap-1">
@@ -487,15 +512,6 @@ export default function OpsCatalogPage() {
             />
           </label>
 
-          <label className="grid gap-1">
-            <span className="text-sm text-eafit-muted">Descripción</span>
-            <textarea
-              className="ui-input min-h-[110px] py-2"
-              value={draft.description}
-              onChange={(e) => updateField("description", e.target.value)}
-              disabled={imgBusy}
-            />
-          </label>
         </div>
 
         {editing && (

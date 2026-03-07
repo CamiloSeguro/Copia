@@ -7,9 +7,8 @@ import { useUsers, type UserRole, type UserRecord } from "../app/userContext";
 type Draft = {
   name: string;
   email: string;
+  phone: string;
   role: UserRole;
-  banned: boolean;
-  banReason: string;
 };
 
 type FormErrors = Partial<Record<keyof Draft, string>>;
@@ -17,9 +16,8 @@ type FormErrors = Partial<Record<keyof Draft, string>>;
 const emptyDraft = (): Draft => ({
   name: "",
   email: "",
+  phone: "",
   role: "usuario",
-  banned: false,
-  banReason: "",
 });
 
 function validateDraft(d: Draft): FormErrors {
@@ -27,7 +25,6 @@ function validateDraft(d: Draft): FormErrors {
   if (!d.name.trim()) errors.name = "El nombre es obligatorio.";
   if (!d.email.trim()) errors.email = "El correo es obligatorio.";
   if (d.email && !/^\S+@\S+\.\S+$/.test(d.email)) errors.email = "Correo inválido.";
-  if (d.banned && !d.banReason.trim()) errors.banReason = "Motivo requerido para vetar.";
   return errors;
 }
 
@@ -71,9 +68,8 @@ export default function OpsUsersPage() {
     setDraft({
       name: u.name ?? "",
       email: u.email ?? "",
+      phone: u.phone ?? "",
       role: u.role ?? "usuario",
-      banned: Boolean(u.banned),
-      banReason: u.banReason ?? "",
     });
     setErrors({});
     setOpenEditor(true);
@@ -95,17 +91,15 @@ export default function OpsUsersPage() {
       createUser({
         name: draft.name,
         email: draft.email,
+        phone: draft.phone || undefined,
         role: draft.role,
-        banned: draft.banned,
-        banReason: draft.banReason,
       });
     } else {
       updateUser(editingId, {
         name: draft.name,
         email: draft.email,
+        phone: draft.phone || undefined,
         role: draft.role,
-        banned: draft.banned,
-        banReason: draft.banReason,
       });
     }
 
@@ -132,7 +126,7 @@ export default function OpsUsersPage() {
           <div>
             <div className="text-2xl font-semibold text-eafit-text">Administración de usuarios</div>
             <div className="text-sm text-eafit-muted mt-1">
-              Agregar, editar, vetar y eliminar usuarios del sistema.
+              Agregar, editar y eliminar usuarios del sistema.
             </div>
           </div>
 
@@ -150,7 +144,7 @@ export default function OpsUsersPage() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <input
               className="ui-input h-10 w-full"
-              placeholder="Buscar por nombre, correo, rol, estado…"
+              placeholder="Buscar por nombre, correo, rol…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -167,50 +161,20 @@ export default function OpsUsersPage() {
                   <div className="flex items-center gap-2">
                     <div className="font-semibold text-eafit-text truncate">{u.name}</div>
 
-                    {u.banned ? (
-                      <span className="inline-flex items-center gap-2 text-xs px-2.5 py-1 rounded-full border border-status-danger/20 bg-status-danger/10 text-status-danger">
-                        <span className="h-2 w-2 rounded-full bg-status-danger" aria-hidden />
-                        Vetado
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-2 text-xs px-2.5 py-1 rounded-full border border-status-success/20 bg-status-success/10 text-status-success">
-                        <span className="h-2 w-2 rounded-full bg-status-success" aria-hidden />
-                        Activo
-                      </span>
-                    )}
-
                     <span className="inline-flex items-center text-xs px-2.5 py-1 rounded-full border border-eafit-border bg-eafit-bg text-eafit-muted">
                       {u.role === "admin" ? "Admin" : u.role === "trabajador" ? "Trabajador" : "Usuario"}
                     </span>
                   </div>
 
                   <div className="text-sm text-eafit-muted mt-1 truncate">{u.email}</div>
-
-                  {u.banned && u.banReason ? (
-                    <div className="text-xs text-status-danger mt-2 line-clamp-2">
-                      <span className="font-semibold">Motivo:</span> {u.banReason}
-                    </div>
+                  {u.phone ? (
+                    <div className="text-xs text-eafit-muted mt-0.5">{u.phone}</div>
                   ) : null}
                 </div>
 
                 <div className="flex gap-2 shrink-0">
                   <button className="ui-btn-ghost h-10" onClick={() => openEdit(u)} type="button">
                     Editar
-                  </button>
-
-                  <button
-                    className={u.banned ? "ui-btn-ghost h-10" : "ui-btn-danger h-10"}
-                    type="button"
-                    onClick={() =>
-                      openEdit({
-                        ...u,
-                        banned: !u.banned,
-                        banReason: u.banned ? "" : u.banReason ?? "",
-                      })
-                    }
-                    title={u.banned ? "Quitar veto" : "Vetar"}
-                  >
-                    {u.banned ? "Quitar veto" : "Vetar"}
                   </button>
 
                   <button className="ui-btn-danger h-10" onClick={() => askDelete(u)} type="button">
@@ -272,6 +236,17 @@ export default function OpsUsersPage() {
           </label>
 
           <label className="grid gap-1">
+            <span className="text-sm text-eafit-muted">Celular</span>
+            <input
+              className="ui-input h-10"
+              value={draft.phone}
+              onChange={(e) => updateField("phone", e.target.value)}
+              placeholder="300 000 0000"
+              type="tel"
+            />
+          </label>
+
+          <label className="grid gap-1">
             <span className="text-sm text-eafit-muted">Rol</span>
             <select
               className="ui-input h-10"
@@ -283,38 +258,6 @@ export default function OpsUsersPage() {
               <option value="admin">Admin</option>
             </select>
           </label>
-
-          <label className="flex items-center justify-between gap-3 rounded-card border border-eafit-border bg-eafit-bg p-3">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-eafit-text">Vetado</div>
-              <div className="text-xs text-eafit-muted mt-1">
-                Si está vetado, no puede solicitar préstamos.
-              </div>
-            </div>
-
-            <input
-              type="checkbox"
-              checked={draft.banned}
-              onChange={(e) => updateField("banned", e.target.checked)}
-              className="h-5 w-5"
-            />
-          </label>
-
-          {draft.banned ? (
-            <label className="grid gap-1">
-              <span className="text-sm text-eafit-muted">Motivo del veto</span>
-              <textarea
-                className={[
-                  "ui-input min-h-[110px] py-2",
-                  errors.banReason ? "border-status-danger focus:ring-status-danger/20" : "",
-                ].join(" ")}
-                value={draft.banReason}
-                onChange={(e) => updateField("banReason", e.target.value)}
-                placeholder="Ej: daños recurrentes, incumplimiento de tiempos, mal uso…"
-              />
-              <FieldError message={errors.banReason} />
-            </label>
-          ) : null}
         </div>
 
         {editing ? (

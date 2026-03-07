@@ -38,17 +38,10 @@ const AVAILABILITY_META: Record<ResourceAvailability, AvailabilityMeta> = {
     cls: "bg-status-warning/10 text-status-warning border-status-warning/20",
     disabled: true,
   },
-  maintenance: {
-    text: "Mantenimiento",
-    dot: "bg-status-neutral",
-    cls: "bg-status-neutral/10 text-status-neutral border-status-neutral/20",
-    disabled: true,
-  },
 };
 
 const TECH_STATUS_LABELS: Record<string, string> = {
   active: "Activo",
-  maintenance: "Mantenimiento",
   retired: "Retirado",
 };
 
@@ -125,10 +118,7 @@ export function ResourceDetailModal({
   const r = resource ?? null;
   if (!r) return null;
 
-  const effective: ResourceAvailability =
-    r.operationalStatus !== "active" ? "maintenance" : availability;
-
-  const s = AVAILABILITY_META[effective];
+  const s = AVAILABILITY_META[availability];
 
   // Bloquear "Agregar" solo si el recurso no está disponible y aún no está seleccionado.
   // Si ya está seleccionado, siempre se permite quitarlo.
@@ -252,8 +242,8 @@ export function ResourceDetailModal({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Asset ID" value={r.assetId} />
-            <Field label="Estado técnico" value={techLabel} />
+            <Field label="ID" value={r.assetId} />
+            <Field label="Estado" value={techLabel} />
           </div>
 
           <div className="ui-card-inner p-4">
@@ -274,14 +264,6 @@ export function ResourceDetailModal({
             )}
           </div>
 
-          <div className="ui-card-inner p-4">
-            <div className="text-[10px] font-semibold text-eafit-muted uppercase tracking-wide mb-2">
-              Descripción
-            </div>
-            <p className="text-sm text-eafit-muted leading-6">
-              {r.description?.trim() || "Sin descripción registrada para este recurso."}
-            </p>
-          </div>
         </div>
       </div>
     </Modal>
