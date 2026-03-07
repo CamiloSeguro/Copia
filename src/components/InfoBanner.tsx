@@ -114,7 +114,7 @@ function PolicyModal({ onClose }: { onClose: () => void }) {
             items={[
               "Lunes a viernes: 8:00 a.m. – 6:00 p.m.",
               "No se realizan préstamos fuera de este horario.",
-              "La entrega y devolución deben ser confirmadas por un practicante.",
+              "La entrega y devolución deben ser confirmadas por un trabajador.",
             ]}
           />
 
@@ -182,7 +182,7 @@ export function InfoBanner() {
                     </div>
 
                     <p className="mt-2 text-xs text-eafit-muted">
-                      Entrega y devolución deben ser confirmadas por un practicante.
+                      Entrega y devolución deben ser confirmadas por un trabajador.
                     </p>
                   </div>
                 </div>

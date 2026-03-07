@@ -1,11 +1,11 @@
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth, isOpsRole } from "../auth/AuthContext";
 import CatalogPage from "../pages/CatalogPage";
 
 /**
  * Puerta de entrada a la ruta raíz "/".
  * - Sin sesión activa       → redirige a /login.
- * - Rol practicante (ops)   → redirige a /ops.
+ * - Rol trabajador (ops)    → redirige a /ops.
  * - Estudiante autenticado  → muestra el catálogo.
  */
 export default function HomeGate() {
@@ -15,7 +15,7 @@ export default function HomeGate() {
     return <Navigate to="/login" replace />;
   }
 
-  if (user.role === "practicante") {
+  if (isOpsRole(user.role)) {
     return <Navigate to="/ops" replace />;
   }
 

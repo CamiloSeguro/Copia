@@ -8,8 +8,6 @@ import { mockResources } from "../data/mockResources";
 // Types
 // =========================
 
-type TicketItem = Ticket["items"][number];
-
 // =========================
 // Constants
 // =========================
@@ -37,26 +35,10 @@ const STATUS_META: Record<Ticket["status"], { text: string; dot: string; pill: s
   },
 };
 
-const ITEM_META = {
-  overdue: {
-    text: "Vencido",
-    pill: "border-status-danger/20 bg-status-danger/10 text-status-danger",
-  },
-  ok: {
-    text: "Entregado",
-    pill: "border-status-success/20 bg-status-success/10 text-status-success",
-  },
-};
 
 // =========================
 // Helpers
 // =========================
-
-function isOverdue(dueAtISO?: string): boolean {
-  if (!dueAtISO) return false;
-  const due = new Date(dueAtISO);
-  return !Number.isNaN(due.getTime()) && Date.now() > due.getTime();
-}
 
 /** Formatea un ISO string a fecha/hora legible en español colombiano. */
 function fmtDate(iso?: string): string {
@@ -78,9 +60,6 @@ function ticketCode(id: string): string {
   return id.slice(-6).toUpperCase();
 }
 
-function overdueCount(items: TicketItem[]): number {
-  return items.filter((it) => isOverdue(it.dueAtISO)).length;
-}
 
 // =========================
 // Icons
@@ -143,8 +122,7 @@ export default function MyLoansPage() {
 
   const totals = useMemo(() => {
     const totalItems = delivered.reduce((acc, t) => acc + t.items.length, 0);
-    const overdueItems = delivered.reduce((acc, t) => acc + overdueCount(t.items), 0);
-    return { totalTickets: delivered.length, totalItems, overdueItems };
+    return { totalTickets: delivered.length, totalItems };
   }, [delivered]);
 
   function toggleTicket(id: string) {
@@ -161,16 +139,9 @@ export default function MyLoansPage() {
           <div className="min-w-0">
             <div className="text-2xl font-semibold text-eafit-text">Mis préstamos</div>
             <div className="text-eafit-muted mt-1">
-              {totals.totalTickets === 0 ? (
-                "Recursos actualmente entregados."
-              ) : (
-                <>
-                  {totals.totalTickets} ticket(s) · {totals.totalItems} recurso(s)
-                  {totals.overdueItems > 0 && (
-                    <> · <span className="text-status-danger font-semibold">{totals.overdueItems} vencido(s)</span></>
-                  )}
-                </>
-              )}
+              {totals.totalTickets === 0
+                ? "Recursos actualmente entregados."
+                : `${totals.totalTickets} ticket(s) · ${totals.totalItems} recurso(s)`}
             </div>
           </div>
 
@@ -202,31 +173,42 @@ export default function MyLoansPage() {
         {/* Content */}
         <div className="mt-6 ui-card overflow-hidden">
           {delivered.length === 0 ? (
-            <div className="p-8">
-              <div className="text-lg font-semibold text-eafit-text">Sin préstamos activos</div>
-              <div className="text-sm text-eafit-muted mt-1">No tienes recursos entregados actualmente.</div>
-              <div className="mt-4">
-                <button className="ui-btn-primary" type="button" onClick={() => nav("/")}>
-                  <span className="ui-btn-label">Ir al catálogo</span>
-                </button>
+            <div className="p-10 flex flex-col items-center text-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-eafit-subtle border border-eafit-border text-eafit-muted">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="M3 9l9-6 9 6v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  <path d="M9 22V12h6v10" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                </svg>
               </div>
+              <div>
+                <div className="text-base font-semibold text-eafit-text">Sin préstamos activos</div>
+                <div className="text-sm text-eafit-muted mt-1">No tienes recursos entregados actualmente.</div>
+              </div>
+              <button className="ui-btn-primary ui-btn-sm mt-1" type="button" onClick={() => nav("/")}>
+                <span className="ui-btn-label">Ir al catálogo</span>
+              </button>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="p-8">
-              <div className="text-lg font-semibold text-eafit-text">Sin resultados</div>
-              <div className="text-sm text-eafit-muted mt-1">Prueba con otro término.</div>
-              <div className="mt-4">
-                <button className="ui-btn-ghost" type="button" onClick={() => setQ("")}>
-                  <span className="ui-btn-label">Limpiar búsqueda</span>
-                </button>
+            <div className="p-10 flex flex-col items-center text-center gap-3">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-eafit-subtle border border-eafit-border text-eafit-muted">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="1.8"/>
+                  <path d="M16.5 16.5 21 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
               </div>
+              <div>
+                <div className="text-base font-semibold text-eafit-text">Sin resultados</div>
+                <div className="text-sm text-eafit-muted mt-1">Prueba con otro término.</div>
+              </div>
+              <button className="ui-btn-ghost ui-btn-sm mt-1" type="button" onClick={() => setQ("")}>
+                <span className="ui-btn-label">Limpiar búsqueda</span>
+              </button>
             </div>
           ) : (
             <div className="divide-y divide-eafit-border">
               {filtered.map((t) => {
                 const tl = STATUS_META[t.status];
                 const isOpen = openIds[t.id] ?? true;
-                const overdue = overdueCount(t.items);
 
                 return (
                   <section key={t.id} className="px-6 py-6">
@@ -243,11 +225,6 @@ export default function MyLoansPage() {
                             <div className="font-semibold text-eafit-text truncate">
                               Ticket {ticketCode(t.id)}
                             </div>
-                            {overdue > 0 && (
-                              <span className="inline-flex items-center text-[11px] px-2 h-6 rounded-full border border-status-danger/20 bg-status-danger/10 text-status-danger shrink-0">
-                                {overdue} vencido(s)
-                              </span>
-                            )}
                           </div>
                           <div className="text-xs text-eafit-muted mt-1">
                             Creado: {fmtDate(t.createdAtISO)}
@@ -278,8 +255,6 @@ export default function MyLoansPage() {
                       <div className="mt-4 flex flex-col gap-3">
                         {t.items.map((it) => {
                           const r = resourceMap.get(it.resourceId);
-                          const od = isOverdue(it.dueAtISO);
-                          const im = od ? ITEM_META.overdue : ITEM_META.ok;
 
                           return (
                             <div key={it.id} className="ui-card-inner p-4">
@@ -291,24 +266,15 @@ export default function MyLoansPage() {
                                   <div className="text-sm text-eafit-muted truncate">
                                     {r?.category ?? "—"}
                                   </div>
-                                  <div className="text-xs text-eafit-muted mt-1">
-                                    {it.dueAtISO ? (
-                                      <>
-                                        Límite:{" "}
-                                        <span className={od ? "text-status-danger font-semibold" : ""}>
-                                          {fmtDate(it.dueAtISO)}
-                                        </span>
-                                      </>
-                                    ) : (
-                                      "Sin fecha límite registrada"
-                                    )}
-                                  </div>
+                                  {it.dueAtISO && (
+                                    <div className="text-xs text-eafit-muted mt-1">
+                                      Límite: {fmtDate(it.dueAtISO)}
+                                    </div>
+                                  )}
                                 </div>
 
-                                <span
-                                  className={["inline-flex items-center text-[11px] px-3 h-7 rounded-pill border shrink-0", im.pill].join(" ")}
-                                >
-                                  {im.text}
+                                <span className="inline-flex items-center text-[11px] px-3 h-7 rounded-pill border shrink-0 border-status-success/20 bg-status-success/10 text-status-success">
+                                  Entregado
                                 </span>
                               </div>
                             </div>

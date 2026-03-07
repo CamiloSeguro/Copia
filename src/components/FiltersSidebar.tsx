@@ -17,8 +17,6 @@ const AVAILABILITY: Array<{
 }> = [
   { key: "all", label: "Todas", dot: "bg-eafit-muted", helper: "Muestra todo el inventario." },
   { key: "available", label: "Disponible", dot: "bg-status-success", helper: "Se puede pedir ahora." },
-  { key: "in_use", label: "En uso", dot: "bg-status-warning", helper: "Está prestado actualmente." },
-  { key: "maintenance", label: "Mantenimiento", dot: "bg-status-neutral", helper: "Fuera de servicio." },
 ];
 
 function Dot({ cls }: { cls: string }) {

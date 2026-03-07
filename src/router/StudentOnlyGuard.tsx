@@ -1,10 +1,10 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth, isOpsRole } from "../auth/AuthContext";
 
 /**
  * Protege rutas exclusivas para estudiantes.
  * - Si no hay sesión activa → redirige a /login.
- * - Si el usuario es practicante/operador/admin → redirige a /ops.
+ * - Si el usuario es trabajador/operador/admin → redirige a /ops.
  * - Si es estudiante → renderiza la ruta normalmente.
  */
 export default function StudentOnlyGuard() {
@@ -14,7 +14,7 @@ export default function StudentOnlyGuard() {
     return <Navigate to="/login" replace />;
   }
 
-  if (user.role === "practicante") {
+  if (isOpsRole(user.role)) {
     return <Navigate to="/ops" replace />;
   }
 

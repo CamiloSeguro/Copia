@@ -341,7 +341,7 @@ export default function RequestDetailPage() {
             <div className="mt-4 lg:hidden rounded-xl border border-status-danger/20 bg-status-danger/10 p-4">
               <div className="text-sm font-semibold text-status-danger">Cancelar ticket</div>
               <div className="text-sm text-eafit-muted mt-1">
-                Solo antes de la entrega. Si ya coordinabas, avisa al practicante.
+                Solo antes de la entrega. Si ya coordinabas, avisa al trabajador.
               </div>
               <button
                 className="mt-3 ui-btn-danger ui-btn-sm w-full"
@@ -451,7 +451,7 @@ export default function RequestDetailPage() {
               <div className="text-sm text-eafit-muted mt-2 leading-6">
                 Lunes a Viernes de 08:00 am – 18:00 pm 
                 <p>No salir del campus</p>
-                <p>Practicante confirma entrega/devolución</p>
+                <p>Trabajador confirma entrega/devolución</p>
               </div>
             </div>
 
@@ -459,7 +459,7 @@ export default function RequestDetailPage() {
               <div className="hidden lg:block rounded-xl border border-status-danger/20 bg-status-danger/10 p-4">
                 <div className="text-sm font-semibold text-status-danger">Cancelar</div>
                 <div className="text-sm text-eafit-muted mt-1">
-                  Solo antes de la entrega. Si ya coordinabas, avisa al practicante.
+                  Solo antes de la entrega. Si ya coordinabas, avisa al trabajador.
                 </div>
                 <button
                   className="mt-3 ui-btn-danger ui-btn-sm w-full"

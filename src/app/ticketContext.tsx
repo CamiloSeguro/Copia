@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState } from "react";
 
 export type TicketDraft = {
   selectedIds: string[];
+  quantities: Record<string, number>; // resourceId -> quantity (≥1)
   startDateISO?: string; // YYYY-MM-DD
   startTime?: string; // HH:MM
   notes?: string;
@@ -15,6 +16,7 @@ type TicketContextValue = {
   setSelectedIds: (ids: string[]) => void;
   toggleSelectedId: (id: string, opts?: { canAdd?: boolean }) => void;
   sanitizeSelectedIds: (allowedIds: string[]) => void;
+  setQuantity: (resourceId: string, quantity: number) => void;
   clear: () => void;
 
   setStartDateISO: (d?: string) => void;
@@ -34,6 +36,7 @@ const TicketContext = createContext<TicketContextValue | null>(null);
 
 const initialDraft: TicketDraft = {
   selectedIds: [],
+  quantities: {},
   startDateISO: undefined,
   startTime: undefined,
   notes: "",
@@ -58,7 +61,13 @@ export function TicketProvider({ children }: { children: React.ReactNode }) {
   const [draft, setDraft] = useState<TicketDraft>(initialDraft);
 
   const setSelectedIds = (ids: string[]) =>
-    setDraft((p) => ({ ...p, selectedIds: dedupe(ids) }));
+    setDraft((p) => {
+      const next = dedupe(ids);
+      const quantities = Object.fromEntries(
+        next.map((id) => [id, p.quantities[id] ?? 1])
+      );
+      return { ...p, selectedIds: next, quantities };
+    });
 
   // 🔐 BLINDADO: el source of truth decide si se puede agregar
   const toggleSelectedId = (id: string, opts?: { canAdd?: boolean }) =>
@@ -68,22 +77,37 @@ export function TicketProvider({ children }: { children: React.ReactNode }) {
       // ✅ siempre permitir quitar
       if (has) {
         const next = p.selectedIds.filter((x) => x !== id);
-        return { ...p, selectedIds: dedupe(next) };
+        const { [id]: _removed, ...quantities } = p.quantities;
+        return { ...p, selectedIds: dedupe(next), quantities };
       }
 
       // ❌ bloquear agregar si no está permitido
       if (opts?.canAdd === false) return p;
 
-      // ✅ agregar
-      return { ...p, selectedIds: dedupe([...p.selectedIds, id]) };
+      // ✅ agregar con cantidad 1
+      return {
+        ...p,
+        selectedIds: dedupe([...p.selectedIds, id]),
+        quantities: { ...p.quantities, [id]: 1 },
+      };
     });
 
   // 🧹 Limpieza automática desde el catálogo
   const sanitizeSelectedIds = (allowedIds: string[]) =>
-    setDraft((p) => ({
-      ...p,
-      selectedIds: p.selectedIds.filter((id) => allowedIds.includes(id)),
-    }));
+    setDraft((p) => {
+      const next = p.selectedIds.filter((id) => allowedIds.includes(id));
+      const quantities = Object.fromEntries(
+        next.map((id) => [id, p.quantities[id] ?? 1])
+      );
+      return { ...p, selectedIds: next, quantities };
+    });
+
+  const setQuantity = (resourceId: string, quantity: number) =>
+    setDraft((p) => {
+      if (!p.selectedIds.includes(resourceId)) return p;
+      const qty = Math.max(1, Math.round(quantity));
+      return { ...p, quantities: { ...p.quantities, [resourceId]: qty } };
+    });
 
   const clear = () => setDraft(initialDraft);
 
@@ -126,6 +150,7 @@ export function TicketProvider({ children }: { children: React.ReactNode }) {
         setSelectedIds,
         toggleSelectedId,
         sanitizeSelectedIds,
+        setQuantity,
         clear,
         setStartDateISO,
         setStartTime,

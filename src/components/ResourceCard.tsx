@@ -27,13 +27,6 @@ const META: Record<
     disabled: true,
     helper: "Está prestado actualmente.",
   },
-  maintenance: {
-    text: "Mantenimiento",
-    dot: "bg-status-neutral",
-    pill: "bg-status-neutral/10 text-status-neutral border-status-neutral/20",
-    disabled: true,
-    helper: "Este recurso está fuera de servicio.",
-  },
 };
 
 const Icons = {
@@ -109,10 +102,7 @@ function MediaPlaceholder({ name, category }: { name: string; category: string }
 }
 
 export function ResourceCard({ resource, availability, selected, onToggle, onOpenDetail }: Props) {
-  const effective: ResourceAvailability =
-    resource.operationalStatus !== "active" ? "maintenance" : availability;
-
-  const s = META[effective];
+  const s = META[availability];
   const disabled = s.disabled;
   const canOpen = !!onOpenDetail;
 
@@ -120,6 +110,14 @@ export function ResourceCard({ resource, availability, selected, onToggle, onOpe
   const showId = !!assetId;
 
   const [copied, setCopied] = useState(false);
+  const [selectKey, setSelectKey] = useState(0);
+
+  function handleToggle() {
+    if (!disabled) {
+      setSelectKey((k) => k + 1);
+      onToggle();
+    }
+  }
 
   const handleCopy = async () => {
     if (!assetId) return;
@@ -131,18 +129,32 @@ export function ResourceCard({ resource, availability, selected, onToggle, onOpe
 
   return (
     <article
+      key={selectKey}
       className={[
         "ui-card ui-card-hover overflow-hidden transition-all duration-150",
         selected ? "ring-2 ring-eafit-secondary shadow-card" : "",
+        selectKey > 0 ? "animate-card-select" : "",
       ].join(" ")}
       aria-selected={selected}
     >
       {/* MEDIA */}
-      <div className="relative h-40 bg-gradient-to-b from-white to-eafit-subtle overflow-hidden flex items-center justify-center p-6">
+      <div
+        className={[
+          "relative h-40 bg-gradient-to-b from-white to-eafit-subtle overflow-hidden flex items-center justify-center p-6",
+          canOpen ? "cursor-pointer group" : "",
+        ].join(" ")}
+        onClick={canOpen ? onOpenDetail : undefined}
+        role={canOpen ? "button" : undefined}
+        tabIndex={canOpen ? -1 : undefined}
+        aria-label={canOpen ? `Ver detalle de ${resource.name}` : undefined}
+      >
         {resource.imageUrl ? (
-          <img src={resource.imageUrl} alt={resource.name} className="max-h-20 w-auto object-contain" />
+          <img src={resource.imageUrl} alt={resource.name} className="max-h-20 w-auto object-contain transition-transform duration-200 group-hover:scale-105" />
         ) : (
           <MediaPlaceholder name={resource.name} category={resource.category} />
+        )}
+        {canOpen && (
+          <div className="absolute inset-0 bg-eafit-primary/0 group-hover:bg-eafit-primary/4 transition-colors duration-200" />
         )}
 
         {/* Pills sobre la imagen */}
@@ -252,7 +264,7 @@ export function ResourceCard({ resource, availability, selected, onToggle, onOpe
           ? "ui-btn-secondary"
           : "ui-btn-primary",
     ].join(" ")}
-    onClick={!disabled ? onToggle : undefined}
+    onClick={!disabled ? handleToggle : undefined}
     disabled={disabled}
     aria-pressed={!disabled ? selected : undefined}
     title={disabled ? s.helper : undefined}

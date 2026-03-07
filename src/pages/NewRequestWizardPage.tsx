@@ -1,8 +1,9 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTicket } from "../app/ticketContext";
-import { mockResources } from "../data/mockResources";
+import { useCatalog } from "../app/catalogContext";
 import { useLoans } from "../app/loansContext";
+import { useAuth } from "../auth/AuthContext";
 import { Topbar } from "../components/TopBar";
 import type { Resource } from "../types";
 
@@ -85,9 +86,11 @@ const DUE_TEXT_SUFFIX = "Devolución: el mismo día antes de las 6:00pm";
 
 export default function NewRequestWizardPage() {
   const nav = useNavigate();
+  const { user } = useAuth();
   const {
     draft,
     setSelectedIds,
+    setQuantity,
     setStartDateISO,
     setStartTime,
     setNotes,
@@ -100,6 +103,7 @@ export default function NewRequestWizardPage() {
 
   const [step, setStep] = useState<Step>(1);
   const [submitDone, setSubmitDone] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const TODAY = todayISO();
@@ -126,16 +130,27 @@ export default function NewRequestWizardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, TODAY, isTodayWeekday]);
 
-  const resourceMap = useMemo(() => new Map(mockResources.map((r) => [r.id, r])), []);
+  const { resources } = useCatalog();
 
-  const selectedResources = useMemo(
-    () => draft.selectedIds.map((id) => resourceMap.get(id)).filter(Boolean) as Resource[],
-    [draft.selectedIds, resourceMap]
+  const resourceMap = useMemo(
+    () => new Map(resources.map((r) => [r.id, r])),
+    [resources]
   );
+
+  const selectedResources = useMemo(() => {
+    return draft.selectedIds
+      .map((id) => resourceMap.get(id))
+      .filter((r): r is Resource => Boolean(r));
+  }, [draft.selectedIds, resourceMap]);
 
   const whenText = formatWhen(draft.startDateISO, draft.startTime);
 
   // ── Validaciones ───────────────────────────────────────────────────────────
+  const totalQuantity = useMemo(
+    () => draft.selectedIds.reduce((sum, id) => sum + (draft.quantities[id] ?? 1), 0),
+    [draft.selectedIds, draft.quantities]
+  );
+
   const step1Ok = draft.selectedIds.length > 0;
 
   const step2Ok =
@@ -178,7 +193,11 @@ export default function NewRequestWizardPage() {
     setSubmitting(true);
     try {
       setStartDateISO(TODAY);
-      createTicketFromDraft({ ...draft, startDateISO: TODAY, type: "immediate" } as any);
+      createTicketFromDraft(
+        { ...draft, startDateISO: TODAY, type: "immediate" } as any,
+        { id: user?.id ?? "", name: user?.name ?? "", email: user?.email ?? "" }
+      );
+      setSubmitted(true);
       setSubmitDone(true);
     } finally {
       setSubmitting(false);
@@ -193,6 +212,88 @@ export default function NewRequestWizardPage() {
   const nextBtnLabel = step === 2 && !isTodayWeekday ? "No disponible hoy" : "Continuar →";
 
   // =========================
+  // Summary (post-submit, read-only)
+  // =========================
+  if (submitted && !submitDone) {
+    return (
+      <div className="min-h-screen bg-eafit-bg">
+        <Topbar />
+        <main className="mx-auto max-w-content px-4 sm:px-6 lg:px-10 py-10">
+          <div className="ui-card p-8 max-w-2xl mx-auto">
+
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-status-success/15 text-status-success text-lg">
+                ✓
+              </div>
+              <div>
+                <div className="text-xl font-semibold text-eafit-text">Resumen de la solicitud</div>
+                <div className="text-sm text-status-success font-medium mt-0.5">Enviada · Pendiente de entrega</div>
+              </div>
+            </div>
+
+            <div className="mt-6 h-px bg-eafit-border" />
+
+            {/* Info general */}
+            <div className="mt-6 grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+              <div>
+                <div className="text-xs text-eafit-muted uppercase tracking-wide">Tipo</div>
+                <div className="mt-1 font-medium text-eafit-text">Inmediato</div>
+              </div>
+              <div>
+                <div className="text-xs text-eafit-muted uppercase tracking-wide">Fecha y hora</div>
+                <div className="mt-1 font-medium text-eafit-text">{whenText}</div>
+              </div>
+              <div className="col-span-2">
+                <div className="text-xs text-eafit-muted uppercase tracking-wide">Devolución</div>
+                <div className="mt-1 text-eafit-text">{dueText}</div>
+              </div>
+              {draft.notes && (
+                <div className="col-span-2">
+                  <div className="text-xs text-eafit-muted uppercase tracking-wide">Notas</div>
+                  <div className="mt-1 text-eafit-text">{draft.notes}</div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 h-px bg-eafit-border" />
+
+            {/* Recursos */}
+            <div className="mt-5">
+              <div className="text-xs text-eafit-muted uppercase tracking-wide mb-3">
+                Recursos — {draft.selectedIds.length} tipo(s) · {totalQuantity} unidad(es)
+              </div>
+              <div className="flex flex-col divide-y divide-eafit-border">
+                {selectedResources.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between gap-4 py-3 text-sm">
+                    <div className="min-w-0">
+                      <div className="font-medium text-eafit-text truncate">{r.name}</div>
+                      <div className="text-xs text-eafit-muted mt-0.5">{r.category}</div>
+                    </div>
+                    <div className="shrink-0 text-eafit-muted">
+                      × <span className="font-semibold text-eafit-text">{draft.quantities[r.id] ?? 1}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-8">
+              <button
+                className="ui-btn-primary ui-btn-lg"
+                onClick={() => { clear(); nav("/"); }}
+                type="button"
+              >
+                <span className="ui-btn-label">Volver al catálogo</span>
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // =========================
   // Success state
   // =========================
   if (submitDone) {
@@ -200,20 +301,36 @@ export default function NewRequestWizardPage() {
       <div className="min-h-screen bg-eafit-bg">
         <Topbar />
         <main className="mx-auto max-w-content px-4 sm:px-6 lg:px-10 py-10">
-          <div className="ui-card p-8">
-            <div className="text-2xl font-semibold text-eafit-text">Solicitud enviada</div>
-            <div className="text-eafit-muted mt-2">
-              Estado: <span className="font-semibold text-eafit-text">Pendiente de entrega</span>
+          <div className="ui-card p-8 max-w-2xl mx-auto">
+
+            {/* Header */}
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-status-success/15 text-status-success text-2xl">
+                ✓
+              </div>
+              <div>
+                <div className="text-2xl font-semibold text-eafit-text">Solicitud enviada</div>
+                <div className="text-sm text-status-success font-medium mt-0.5">Pendiente de entrega</div>
+              </div>
             </div>
 
-            <div className="mt-4 text-eafit-text">
-              👉 Acércate al practicante en el horario seleccionado para confirmar la entrega.
+            <div className="mt-6 h-px bg-eafit-border" />
+
+            {/* Instrucción */}
+            <div className="mt-6 rounded-card border border-eafit-secondary/20 bg-eafit-secondary/8 p-4 text-sm text-eafit-text">
+              Acércate al trabajador del laboratorio en el horario seleccionado para confirmar la entrega de los recursos.
             </div>
 
-            <div className="mt-6 ui-card-inner p-5 text-sm text-eafit-text bg-eafit-secondary/10">
-              <div className="font-semibold">Día y hora</div>
-              <div className="mt-1">{whenText}</div>
-              <div className="mt-3">{dueText}</div>
+            {/* Fecha y hora */}
+            <div className="mt-6 grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+              <div>
+                <div className="text-xs text-eafit-muted uppercase tracking-wide">Fecha y hora</div>
+                <div className="mt-1 font-medium text-eafit-text">{whenText}</div>
+              </div>
+              <div>
+                <div className="text-xs text-eafit-muted uppercase tracking-wide">Devolución</div>
+                <div className="mt-1 font-medium text-eafit-text">{dueText}</div>
+              </div>
             </div>
 
             <div className="mt-8 flex flex-col sm:flex-row gap-3">
@@ -224,13 +341,12 @@ export default function NewRequestWizardPage() {
               >
                 <span className="ui-btn-label">Volver al catálogo</span>
               </button>
-
               <button
                 className="ui-btn-ghost ui-btn-lg"
                 onClick={() => setSubmitDone(false)}
                 type="button"
               >
-                <span className="ui-btn-label">Ver resumen</span>
+                <span className="ui-btn-label">Ver resumen completo</span>
               </button>
             </div>
           </div>
@@ -256,8 +372,8 @@ export default function NewRequestWizardPage() {
             </div>
           </div>
 
-          <button className="ui-btn-ghost ui-btn-sm" onClick={() => nav("/")} type="button">
-            <span className="ui-btn-label">← Cancelar</span>
+          <button className="ui-btn-primary ui-btn-sm" onClick={() => nav("/")} type="button">
+            <span className="ui-btn-label">Cancelar</span>
           </button>
         </div>
 
@@ -291,17 +407,29 @@ export default function NewRequestWizardPage() {
                   ) : (
                     selectedResources.map((r) => (
                       <div key={r.id} className="ui-card-inner p-4 flex items-center justify-between gap-4">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="font-semibold text-eafit-text truncate">{r.name}</div>
                           <div className="text-sm text-eafit-muted">{r.category}</div>
                         </div>
-                        <button
-                          className="ui-btn-ghost ui-btn-sm"
-                          onClick={() => setSelectedIds(draft.selectedIds.filter((id) => id !== r.id))}
-                          type="button"
-                        >
-                          <span className="ui-btn-label">Quitar</span>
-                        </button>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <label className="flex items-center gap-2 text-sm text-eafit-muted">
+                            Cant.
+                            <input
+                              type="number"
+                              min={1}
+                              className="ui-input h-9 w-16 text-center"
+                              value={draft.quantities[r.id] ?? 1}
+                              onChange={(e) => setQuantity(r.id, Number(e.target.value))}
+                            />
+                          </label>
+                          <button
+                            className="ui-btn-ghost ui-btn-sm"
+                            onClick={() => setSelectedIds(draft.selectedIds.filter((id) => id !== r.id))}
+                            type="button"
+                          >
+                            <span className="ui-btn-label">Quitar</span>
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -387,7 +515,9 @@ export default function NewRequestWizardPage() {
                     </div>
                     <div>
                       <div className="text-eafit-muted text-xs">Recursos</div>
-                      <div className="font-medium text-eafit-text">{draft.selectedIds.length}</div>
+                      <div className="font-medium text-eafit-text">
+                        {draft.selectedIds.length} tipo(s) · {totalQuantity} unidad(es)
+                      </div>
                     </div>
                     <div className="col-span-2">
                       <div className="text-eafit-muted text-xs">Fecha y hora</div>
@@ -428,7 +558,7 @@ export default function NewRequestWizardPage() {
                       className="mt-1 h-4 w-4 accent-eafit-secondary"
                     />
                     <span className="leading-6">
-                      Acepto las condiciones del préstamo y el control de entrega/devolución por parte del practicante.
+                      Acepto las condiciones del préstamo y el control de entrega/devolución por parte del trabajador.
                     </span>
                   </label>
                 </div>
@@ -447,12 +577,14 @@ export default function NewRequestWizardPage() {
             {/* Footer controls */}
             <div className="mt-8 flex items-center justify-between gap-3">
               <button
-                className="ui-btn-ghost ui-btn-lg disabled:opacity-40"
-                onClick={back}
-                disabled={step === 1}
+                className="ui-btn-primary ui-btn-lg"
+                onClick={() => {
+                  if (step === 1) nav("/");
+                  else back();
+                }}
                 type="button"
-              >
-                ← Atrás
+                >
+                ← {step === 1 ? "Volver al catálogo" : "Atrás"}
               </button>
 
               {step < 3 ? (
@@ -468,10 +600,10 @@ export default function NewRequestWizardPage() {
                 <button
                   className="ui-btn-primary ui-btn-lg disabled:opacity-40"
                   onClick={submit}
-                  disabled={!(step1Ok && step2Ok && step3Ok) || submitting}
+                  disabled={!(step1Ok && step2Ok && step3Ok) || submitting || submitted}
                   type="button"
                 >
-                  {submitting ? "Enviando…" : "Confirmar solicitud"}
+                  {submitting ? "Enviando…" : submitted ? "Ya enviada" : "Confirmar solicitud"}
                 </button>
               )}
             </div>
@@ -492,7 +624,9 @@ export default function NewRequestWizardPage() {
             <div className="mt-4 ui-card-inner p-4 text-sm bg-eafit-bg">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-eafit-muted">Recursos</div>
-                <div className="font-semibold text-eafit-text">{draft.selectedIds.length}</div>
+                <div className="font-semibold text-eafit-text">
+                  {draft.selectedIds.length} tipo(s) · {totalQuantity} ud.
+                </div>
               </div>
               <div className="mt-3">
                 <div className="text-eafit-muted">Fecha y hora</div>
@@ -515,11 +649,14 @@ export default function NewRequestWizardPage() {
             </div>
 
             <div className="mt-6 ui-card-inner p-4 text-sm text-eafit-text bg-eafit-bg">
-              <b>Reglas:</b> Lunes a Viernes de 08:00–18:00 · No salir del campus · Practicante confirma entrega/devolución.
+              <b>Reglas:</b> 
+              <p>· Lunes a Viernes de 08:00–18:00</p>
+              <p>· No salir del campus</p>
+              <p>· Trabajador confirma entrega/devolución</p>  
             </div>
 
             <button
-              className="mt-6 w-full ui-btn-ghost ui-btn-lg"
+              className="mt-6 w-full ui-btn-secondary ui-btn-lg"
               onClick={() => { setSelectedIds([]); setStep(1); nav("/"); }}
               type="button"
             >

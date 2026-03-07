@@ -97,17 +97,17 @@ export default function LoginPage() {
 
   const [tab, setTab] = useState<Tab>("login");
 
-  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [loginForm, setLoginForm] = useState({ emailOrPhone: "", password: "" });
   const [loginState, setLoginState] = useState<{ loading: boolean; error: string | null }>({
     loading: false,
     error: null,
   });
 
-  const [regForm, setRegForm] = useState({ email: "", password: "", confirm: "" });
+  const [regForm, setRegForm] = useState({ email: "", phone: "", password: "", confirm: "" });
   const [regState, setRegState] = useState<{
     loading: boolean;
     error: string | null;
-    errors: { email?: string; password?: string; confirm?: string };
+    errors: { email?: string; phone?: string; password?: string; confirm?: string };
   }>({ loading: false, error: null, errors: {} });
 
   const from = useMemo(
@@ -127,10 +127,12 @@ export default function LoginPage() {
 
   const validateRegister = () => {
     const email = regForm.email.trim();
-    const errors: { email?: string; password?: string; confirm?: string } = {};
+    const errors: { email?: string; phone?: string; password?: string; confirm?: string } = {};
 
     if (!email) errors.email = "El correo es requerido.";
     else if (!isEafitEmail(email)) errors.email = "Debe ser un correo institucional (@eafit.edu.co).";
+
+    if (!regForm.phone.trim()) errors.phone = "El celular es requerido.";
 
     if (!regForm.password) errors.password = "La contraseña es requerida.";
     else if (regForm.password.length < 8) errors.password = "Mínimo 8 caracteres.";
@@ -147,7 +149,7 @@ export default function LoginPage() {
     setLoginState({ loading: true, error: null });
 
     try {
-      await login(loginForm.email.trim(), loginForm.password);
+      await login(loginForm.emailOrPhone.trim(), loginForm.password);
 
       // ✅ seguridad UX: usuario nunca entra a /ops por "from"
       if (isOpsPath(from)) {
@@ -173,7 +175,7 @@ export default function LoginPage() {
     setRegState((p) => ({ ...p, loading: true }));
     try {
       // ✅ register ahora auto-loguea en el AuthContext
-      await register(regForm.email.trim(), regForm.password);
+      await register(regForm.email.trim(), regForm.password, regForm.phone.trim() || undefined);
 
       // ✅ directo al dashboard del estudiante
       nav("/", { replace: true });
@@ -184,34 +186,49 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-eafit-bg flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md ui-card p-8">
-        <div className="mb-6">
-          <div className="text-xs text-eafit-muted">Sistema de préstamos</div>
-          <h1 className="text-2xl font-semibold text-eafit-text mt-1">
-            {tab === "login" ? "Iniciar sesión" : "Crear cuenta"}
-          </h1>
-          <p className="text-sm text-eafit-muted mt-2">
-            {tab === "login"
-              ? "Ingresa con tu correo institucional para acceder al sistema."
-              : "Regístrate con tu correo institucional EAFIT."}
-          </p>
+      <div className="w-full max-w-md">
+
+        {/* Brand header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-eafit-primary shadow-soft mb-4">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <rect x="3" y="3" width="8" height="8" rx="1.5" fill="white" fillOpacity="0.9"/>
+              <rect x="13" y="3" width="8" height="8" rx="1.5" fill="white" fillOpacity="0.5"/>
+              <rect x="3" y="13" width="8" height="8" rx="1.5" fill="white" fillOpacity="0.5"/>
+              <rect x="13" y="13" width="8" height="8" rx="1.5" fill="white" fillOpacity="0.9"/>
+            </svg>
+          </div>
+          <div className="text-xl font-semibold text-eafit-text">Medialab</div>
+          <div className="text-sm text-eafit-muted mt-0.5">Sistema de préstamos · EAFIT</div>
         </div>
 
-        {/* ✅ Tabs pro */}
-        <div className="mb-6">
-          <SegmentedTabs value={tab} onChange={switchTab} />
-        </div>
+        <div className="ui-card p-8">
+          <div className="mb-6">
+            <h1 className="text-xl font-semibold text-eafit-text">
+              {tab === "login" ? "Iniciar sesión" : "Crear cuenta"}
+            </h1>
+            <p className="text-sm text-eafit-muted mt-1.5">
+              {tab === "login"
+                ? "Ingresa con tu correo institucional."
+                : "Regístrate con tu correo @eafit.edu.co."}
+            </p>
+          </div>
+
+          {/* Tabs */}
+          <div className="mb-6">
+            <SegmentedTabs value={tab} onChange={switchTab} />
+          </div>
 
         {tab === "login" && (
           <form onSubmit={onLoginSubmit} className="space-y-4">
-            <Field label="Correo">
+            <Field label="Correo o celular">
               <input
                 className="ui-input mt-1"
-                type="email"
+                type="text"
                 autoComplete="username"
-                placeholder="xxxxxx@eafit.edu.co"   // ✅ no tu correo
-                value={loginForm.email}
-                onChange={(e) => setLoginForm((p) => ({ ...p, email: e.target.value }))}
+                placeholder="Correo Institucional"
+                value={loginForm.emailOrPhone}
+                onChange={(e) => setLoginForm((p) => ({ ...p, emailOrPhone: e.target.value }))}
                 required
               />
             </Field>
@@ -237,8 +254,6 @@ export default function LoginPage() {
             <button type="submit" disabled={loginState.loading} className="ui-btn-primary w-full h-12 disabled:opacity-60">
               {loginState.loading ? "Entrando..." : "Entrar"}
             </button>
-
-            <p className="text-xs text-eafit-muted">El rol siempre debe venir del backend.</p>
           </form>
         )}
 
@@ -252,13 +267,32 @@ export default function LoginPage() {
                 ].join(" ")}
                 type="email"
                 autoComplete="username"
-                placeholder="xxxxxx@eafit.edu.co"  // ✅ no tu correo
+                placeholder="Correo Institucional"  // ✅ no tu correo
                 value={regForm.email}
                 onChange={(e) => {
                   const v = e.target.value;
                   setRegForm((p) => ({ ...p, email: v }));
                   if (regState.errors.email)
                     setRegState((p) => ({ ...p, errors: { ...p.errors, email: undefined } }));
+                }}
+              />
+            </Field>
+
+            <Field label="Celular" error={regState.errors.phone}>
+              <input
+                className={[
+                  "ui-input mt-1",
+                  regState.errors.phone ? "border-status-danger focus:ring-status-danger/30" : "",
+                ].join(" ")}
+                type="tel"
+                autoComplete="tel"
+                placeholder="Número Celular"
+                value={regForm.phone}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setRegForm((p) => ({ ...p, phone: v }));
+                  if (regState.errors.phone)
+                    setRegState((p) => ({ ...p, errors: { ...p.errors, phone: undefined } }));
                 }}
               />
             </Field>
@@ -301,10 +335,6 @@ export default function LoginPage() {
               />
             </Field>
 
-            <div className="rounded-card bg-eafit-surface border border-eafit-border px-4 py-3 text-xs text-eafit-muted">
-              Las cuentas nuevas tienen rol de <span className="font-semibold text-eafit-text">usuario</span>.
-            </div>
-
             {regState.error && (
               <div className="rounded-card border border-status-danger/30 bg-status-danger/10 p-4 text-sm text-status-danger">
                 {regState.error}
@@ -316,6 +346,7 @@ export default function LoginPage() {
             </button>
           </form>
         )}
+        </div>
       </div>
     </div>
   );

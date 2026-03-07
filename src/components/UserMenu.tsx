@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth, isOpsRole } from "../auth/AuthContext";
 
-const roleLabel = (role?: string) => (role === "practicante" ? "Practicante" : "Usuario");
+const roleLabel = (role?: string) =>
+  role === "admin" ? "Admin" : role === "trabajador" ? "Trabajador" : "Usuario";
 
 const avatarLetter = (name?: string, email?: string) =>
   ((name ?? "").trim()[0] ?? (email ?? "").trim()[0] ?? "U").toUpperCase();
@@ -15,7 +16,7 @@ export default function UserMenu({ className = "" }: { className?: string }) {
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const isOps = isAuthed && user?.role === "practicante";
+  const isOps = isAuthed && isOpsRole(user?.role);
   const label = roleLabel(user?.role);
   const avatar = avatarLetter(user?.name, user?.email);
 

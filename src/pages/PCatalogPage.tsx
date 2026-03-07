@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Topbar } from "../components/TopBar";
 import { Modal } from "../components/Modal";
@@ -18,8 +18,9 @@ type Draft = {
   /** Puede ser URL pública o DataURL base64 */
   imageUrl: string;
 
+  location: string;
+  purchaseDate: string;
   includesText: string;
-  description: string;
 };
 
 type FormErrors = Partial<Record<keyof Draft, string>>;
@@ -34,8 +35,9 @@ const emptyDraft = (): Draft => ({
   category: "",
   operationalStatus: "active",
   imageUrl: "",
+  location: "",
+  purchaseDate: "",
   includesText: "",
-  description: "",
 });
 
 function toIncludesArray(text: string): string[] {
@@ -128,6 +130,17 @@ export default function OpsCatalogPage() {
   const [q, setQ] = useState("");
   const list = useMemo(() => search(q), [q, resources, search]);
 
+    const categories = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of resources) {
+      const c = (r.category ?? "").trim();
+      if (c) set.add(c);
+    }
+    return Array.from(set).sort((a, b) =>
+      a.localeCompare(b, "es", { sensitivity: "base" })
+    );
+  }, [resources]);
+
   const [openEditor, setOpenEditor] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -142,6 +155,15 @@ export default function OpsCatalogPage() {
     () => resources.find((r) => r.id === editingId) ?? null,
     [editingId, resources]
   );
+
+  // ✅ FIX: evita que el foco se vaya a la X al re-render.
+  // Enfoca el primer campo SOLO cuando el modal se abre.
+  const assetIdRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!openEditor) return;
+    // Espera a que el Modal se pinte (y gane el “focus trap” si lo tiene)
+    requestAnimationFrame(() => assetIdRef.current?.focus());
+  }, [openEditor]);
 
   function openCreate() {
     setEditingId(null);
@@ -159,8 +181,9 @@ export default function OpsCatalogPage() {
       category: r.category ?? "",
       operationalStatus: r.operationalStatus ?? "active",
       imageUrl: r.imageUrl ?? "",
+      location: r.location ?? "",
+      purchaseDate: r.purchaseDate ?? "",
       includesText: (r.includes ?? []).join(", "),
-      description: r.description ?? "",
     });
     setFormErrors({});
     setImgError(null);
@@ -190,8 +213,9 @@ export default function OpsCatalogPage() {
       // base64 o url pública
       imageUrl: draft.imageUrl?.trim() || undefined,
 
+      location: draft.location?.trim() || undefined,
+      purchaseDate: draft.purchaseDate?.trim() || undefined,
       includes: toIncludesArray(draft.includesText),
-      description: draft.description?.trim() || undefined,
     };
 
     if (!editingId) createResource(payload);
@@ -249,7 +273,7 @@ export default function OpsCatalogPage() {
             <button className="ui-btn-ghost h-10" onClick={() => nav("/ops")} type="button">
               ← Volver
             </button>
-            <button className="ui-btn h-10" onClick={openCreate} type="button">
+            <button className="ui-btn-primary h-10" onClick={openCreate} type="button">
               + Nuevo recurso
             </button>
           </div>
@@ -331,7 +355,7 @@ export default function OpsCatalogPage() {
               {draft.imageUrl ? (
                 <button
                   type="button"
-                  className="ui-btn-ghost h-9"
+                  className="ui-btn-danger h-9"
                   onClick={() => updateField("imageUrl", "")}
                   disabled={imgBusy}
                 >
@@ -377,14 +401,10 @@ export default function OpsCatalogPage() {
                       />
                     </label>
 
-                    <div className="text-xs text-eafit-muted truncate">
-                      Tip: Fotos livianas (&lt; 500KB)
-                    </div>
+                    <div className="text-xs text-eafit-muted truncate">Tip: Fotos livianas (&lt; 500KB)</div>
                   </div>
 
-                  {imgError ? (
-                    <div className="mt-2 text-xs text-status-danger">{imgError}</div>
-                  ) : null}
+                  {imgError ? <div className="mt-2 text-xs text-status-danger">{imgError}</div> : null}
                 </div>
               </div>
             </div>
@@ -393,6 +413,7 @@ export default function OpsCatalogPage() {
           <label className="grid gap-1">
             <span className="text-sm text-eafit-muted">ID inventario (assetId)</span>
             <input
+              ref={assetIdRef} // ✅ foco aquí al abrir
               className={[
                 "ui-input h-10",
                 formErrors.assetId ? "border-status-danger focus:ring-status-danger/20" : "",
@@ -419,9 +440,10 @@ export default function OpsCatalogPage() {
             <FieldError message={formErrors.name} />
           </label>
 
-          <label className="grid gap-1">
+                    <label className="grid gap-1">
             <span className="text-sm text-eafit-muted">Categoría</span>
-            <input
+
+            <select
               className={[
                 "ui-input h-10",
                 formErrors.category ? "border-status-danger focus:ring-status-danger/20" : "",
@@ -429,7 +451,18 @@ export default function OpsCatalogPage() {
               value={draft.category}
               onChange={(e) => updateField("category", e.target.value)}
               disabled={imgBusy}
-            />
+            >
+              <option value="" disabled>
+                Selecciona una categoría…
+              </option>
+
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+
             <FieldError message={formErrors.category} />
           </label>
 
@@ -438,15 +471,34 @@ export default function OpsCatalogPage() {
             <select
               className="ui-input h-10"
               value={draft.operationalStatus}
-              onChange={(e) =>
-                updateField("operationalStatus", e.target.value as Draft["operationalStatus"])
-              }
+              onChange={(e) => updateField("operationalStatus", e.target.value as Draft["operationalStatus"])}
               disabled={imgBusy}
             >
               <option value="active">Activo</option>
-              <option value="maintenance">Mantenimiento</option>
               <option value="retired">Retirado</option>
             </select>
+          </label>
+
+          <label className="grid gap-1">
+            <span className="text-sm text-eafit-muted">Ubicación</span>
+            <input
+              className="ui-input h-10"
+              placeholder="Estante A, Cajón 3, Sala de equipos…"
+              value={draft.location}
+              onChange={(e) => updateField("location", e.target.value)}
+              disabled={imgBusy}
+            />
+          </label>
+
+          <label className="grid gap-1">
+            <span className="text-sm text-eafit-muted">Fecha de compra</span>
+            <input
+              type="date"
+              className="ui-input h-10"
+              value={draft.purchaseDate}
+              onChange={(e) => updateField("purchaseDate", e.target.value)}
+              disabled={imgBusy}
+            />
           </label>
 
           <label className="grid gap-1">
@@ -460,15 +512,6 @@ export default function OpsCatalogPage() {
             />
           </label>
 
-          <label className="grid gap-1">
-            <span className="text-sm text-eafit-muted">Descripción</span>
-            <textarea
-              className="ui-input min-h-[110px] py-2"
-              value={draft.description}
-              onChange={(e) => updateField("description", e.target.value)}
-              disabled={imgBusy}
-            />
-          </label>
         </div>
 
         {editing && (

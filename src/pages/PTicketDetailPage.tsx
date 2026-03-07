@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useLoans, type Ticket } from "../app/loansContext";
-import { mockResources } from "../data/mockResources";
+import { useCatalog } from "../app/catalogContext";
 import { Modal } from "../components/Modal";
 import { Topbar } from "../components/TopBar";
 
@@ -120,7 +120,12 @@ export default function OpsTicketDetailPage() {
 
   const ticket = id ? getTicket(id) : undefined;
 
-  const resourceMap = useMemo(() => new Map(mockResources.map((r) => [r.id, r] as const)), []);
+  const { resources } = useCatalog();
+
+  const resourceMap = useMemo(
+  () => new Map(resources.map((r) => [r.id, r] as const)),
+  [resources]
+);
 
   /* =============================
      STATES
@@ -197,7 +202,9 @@ export default function OpsTicketDetailPage() {
 
               <span className="ui-chip ui-chip-off">Inmediato</span>
 
-              <span className="ui-chip ui-chip-off">Ítems: {ticket.items.length}</span>
+              <span className="ui-chip ui-chip-off">
+                {ticket.items.length} tipo(s) · {ticket.items.reduce((sum, it) => sum + (it.quantity ?? 1), 0)} ud.
+              </span>
 
               <span className="ui-chip ui-chip-off">Fecha/Hora: {fmtStart(ticket)}</span>
             </div>
@@ -209,7 +216,7 @@ export default function OpsTicketDetailPage() {
           </div>
 
           <div className="flex gap-2 shrink-0">
-            <button className="ui-btn-ghost ui-btn-sm" onClick={() => nav("/ops")} type="button">
+            <button className="ui-btn-primary ui-btn-sm" onClick={() => nav("/ops")} type="button">
               ← Solicitudes
             </button>
           </div>
@@ -230,8 +237,15 @@ export default function OpsTicketDetailPage() {
                   <div key={it.id} className="rounded-card border border-eafit-border p-4 bg-white">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
-                        <div className="font-semibold text-eafit-text">{r?.name ?? it.resourceId}</div>
-                        <div className="text-sm text-eafit-muted">{r?.category ?? "—"}</div>
+                        <div className="font-semibold text-eafit-text">
+                          {r?.name ?? "Recurso no encontrado"}
+                        </div>
+                        <div className="text-sm text-eafit-muted">
+                          {r?.category ?? "Puede haber sido eliminado del catálogo"}
+                        </div>
+                        <div className="text-xs text-eafit-muted mt-1">
+                          Cantidad: <span className="font-medium text-eafit-text">{it.quantity ?? 1}</span>
+                        </div>
 
                         {it.deliveredAtISO ? (
                           <div className="text-xs text-eafit-muted mt-2">
@@ -306,7 +320,7 @@ export default function OpsTicketDetailPage() {
             <div className="mt-6 rounded-card border border-eafit-border bg-eafit-bg p-4 text-sm text-eafit-text">
               <div className="font-semibold">Regla</div>
               <div className="text-eafit-muted mt-1">
-                La entrega y devolución deben ser confirmadas por practicante.
+                La entrega y devolución deben ser confirmadas por trabajador.
               </div>
             </div>
           </aside>

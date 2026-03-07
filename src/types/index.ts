@@ -5,7 +5,7 @@
 // =========================
 
 /** Estado operativo del equipo (condición técnica, no disponibilidad de uso). */
-export type ResourceOperationalStatus = "active" | "maintenance" | "retired";
+export type ResourceOperationalStatus = "active" | "retired";
 
 export type Resource = {
   /** ID interno (slug/uuid). Ej: "metaquest3_01" */
@@ -24,8 +24,8 @@ export type Resource = {
   includes?: string[];
   imageUrl?: string;
   location?: string;
+  purchaseDate?: string;
   code?: string;
-  description?: string;
 };
 
 // =========================
@@ -36,7 +36,7 @@ export type Resource = {
  * Estado de disponibilidad calculado, usado en catálogo y filtros.
  * Importar exclusivamente desde aquí: CatalogPage, FiltersSidebar, ResourceCard.
  */
-export type AvailabilityFilter = "all" | "available" | "in_use" | "maintenance";
+export type AvailabilityFilter = "all" | "available" | "in_use";
 
 /** Estado de disponibilidad sin "all" — para ResourceCard y computeResourceAvailability. */
 export type ResourceAvailability = Exclude<AvailabilityFilter, "all">;
@@ -58,6 +58,7 @@ export type TicketItemStatus = "pending" | "delivered" | "returned" | "cancelled
 export type TicketItem = {
   id: string;
   resourceId: string;
+  quantity: number;
   status: TicketItemStatus;
   deliveredAtISO?: string;
   dueAtISO?: string;
@@ -99,14 +100,11 @@ export function isResourceInUse(resourceId: string, tickets: Ticket[]): boolean 
 
 /**
  * Calcula la disponibilidad de un recurso según el estado actual de los tickets.
- *
- * Prioridad: maintenance > in_use > available
  */
 export function computeResourceAvailability(
   resource: Resource,
   tickets: Ticket[]
 ): ResourceAvailability {
-  if (resource.operationalStatus !== "active") return "maintenance";
   if (isResourceInUse(resource.id, tickets)) return "in_use";
   return "available";
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Topbar } from "../components/TopBar";
 import { InfoBanner } from "../components/InfoBanner";
@@ -34,20 +34,12 @@ function availabilityLabel(v: AvailabilityFilter): string {
     all: "Todas",
     available: "Disponible",
     in_use: "En uso",
-    maintenance: "Mantenimiento",
   };
   return labels[v];
 }
 
-// ✅ Fuente única para decidir si se puede AGREGAR desde el catálogo
-function canAddFromCatalog(args: {
-  r: Resource;
-  availabilityById: Map<string, ResourceAvailability>;
-}): boolean {
-  const { r, availabilityById } = args;
-  const a = availabilityById.get(r.id) ?? "available";
-  const effective: ResourceAvailability = r.operationalStatus !== "active" ? "maintenance" : a;
-  return effective === "available";
+function canAddFromCatalog(r: Resource, availabilityById: Map<string, ResourceAvailability>): boolean {
+  return (availabilityById.get(r.id) ?? "available") === "available";
 }
 
 // =========================
@@ -55,14 +47,14 @@ function canAddFromCatalog(args: {
 // =========================
 
 export default function CatalogPage() {
-  const nav = useNavigate();
-  const { resources } = useCatalog(); // ✅ ahora sí: fuente real del catálogo
+  const navigate = useNavigate();
+  const { resources } = useCatalog();
   const { draft, toggleSelectedId, setSelectedIds } = useTicket();
   const { tickets } = useLoans();
 
-  const [sp, setSp] = useSearchParams();
-  const q = sp.get("q") ?? "";
-  const qNorm = normalize(q);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchQuery = searchParams.get("q") ?? "";
+  const searchQueryNorm = normalize(searchQuery);
 
   const categories = useMemo(
     () => Array.from(new Set(resources.map((r) => r.category))).sort(),
@@ -72,7 +64,6 @@ export default function CatalogPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | "all">("all");
   const [selectedAvailability, setSelectedAvailability] = useState<AvailabilityFilter>("all");
 
-  // Disponibilidad calculada por recurso — usa el modelo actual del loansContext
   const availabilityById = useMemo(() => {
     const map = new Map<string, ResourceAvailability>();
     for (const r of resources) {
@@ -81,58 +72,60 @@ export default function CatalogPage() {
     return map;
   }, [resources, tickets]);
 
-  // ✅ Sanitiza selección cuando cambie disponibilidad
+  // Ref para evitar que draft.selectedIds sea dependencia del efecto
+  const selectedIdsRef = useRef(draft.selectedIds);
+  selectedIdsRef.current = draft.selectedIds;
+
   useEffect(() => {
     const allowed = new Set<string>();
     for (const r of resources) {
-      if (canAddFromCatalog({ r, availabilityById })) allowed.add(r.id);
+      if (canAddFromCatalog(r, availabilityById)) allowed.add(r.id);
     }
-    const cleaned = draft.selectedIds.filter((id) => allowed.has(id));
-    if (cleaned.length !== draft.selectedIds.length) setSelectedIds(cleaned);
-  }, [resources, availabilityById, draft.selectedIds, setSelectedIds]);
+    const cleaned = selectedIdsRef.current.filter((id) => allowed.has(id));
+    if (cleaned.length !== selectedIdsRef.current.length) setSelectedIds(cleaned);
+  }, [resources, availabilityById, setSelectedIds]);
 
-  // Recursos filtrados
   const filtered = useMemo(() => {
     return resources.filter((r) => {
-      const okCat = selectedCategory === "all" || r.category === selectedCategory;
-
+      if (r.operationalStatus !== "active") return false;
       const avail = availabilityById.get(r.id) ?? "available";
+      const okCat = selectedCategory === "all" || r.category === selectedCategory;
       const okAvail = selectedAvailability === "all" || avail === selectedAvailability;
-
-      const okSearch = !qNorm || resourceHaystack(r).includes(qNorm);
-
+      const okSearch = !searchQueryNorm || resourceHaystack(r).includes(searchQueryNorm);
       return okCat && okAvail && okSearch;
     });
-  }, [resources, selectedCategory, selectedAvailability, qNorm, availabilityById]);
+  }, [resources, selectedCategory, selectedAvailability, searchQueryNorm, availabilityById]);
 
   const hasActiveFilters =
-    selectedCategory !== "all" || selectedAvailability !== "all" || qNorm.length > 0;
+    selectedCategory !== "all" || selectedAvailability !== "all" || searchQueryNorm.length > 0;
+
+  const availabilityCounts = useMemo(() => {
+    let available = 0;
+    let inUse = 0;
+    for (const r of resources) {
+      if (r.operationalStatus !== "active") continue;
+      if ((availabilityById.get(r.id) ?? "available") === "available") available++;
+      else inUse++;
+    }
+    return { available, inUse };
+  }, [resources, availabilityById]);
 
   function clearAll() {
     setSelectedCategory("all");
     setSelectedAvailability("all");
-    setSp((prev) => {
+    setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("q");
       return next;
     });
   }
 
-  // Detail modal (✅ derivado desde resources, NO mock)
   const [detailResourceId, setDetailResourceId] = useState<string | null>(null);
   const detailResource = useMemo(
     () => (detailResourceId ? resources.find((x) => x.id === detailResourceId) ?? null : null),
     [detailResourceId, resources]
   );
   const detailSelected = !!detailResourceId && draft.selectedIds.includes(detailResourceId);
-
-  function openDetail(id: string) {
-    setDetailResourceId(id);
-  }
-
-  function closeDetail() {
-    setDetailResourceId(null);
-  }
 
   return (
     <div className="min-h-screen bg-eafit-bg pb-[96px]">
@@ -160,16 +153,30 @@ export default function CatalogPage() {
                 <div className="min-w-0">
                   <div className="text-xl font-semibold text-eafit-text">Catálogo</div>
                   <div className="text-sm text-eafit-muted mt-1">
-                    {filtered.length} {filtered.length === 1 ? "resultado" : "resultados"}
-                    {hasActiveFilters && <span className="text-eafit-muted"> · filtros aplicados</span>}
+                    {hasActiveFilters ? (
+                      <>{filtered.length} {filtered.length === 1 ? "resultado" : "resultados"} · filtros aplicados</>
+                    ) : (
+                      <>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-status-success" aria-hidden />
+                          {availabilityCounts.available} disponible{availabilityCounts.available !== 1 ? "s" : ""}
+                        </span>
+                        {availabilityCounts.inUse > 0 && (
+                          <span className="ml-3 inline-flex items-center gap-1.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-status-warning" aria-hidden />
+                            {availabilityCounts.inUse} en uso
+                          </span>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   {/* Chips de filtros activos */}
                   {hasActiveFilters && (
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {qNorm && (
+                      {searchQueryNorm && (
                         <span className="ui-chip ui-chip-on">
-                          Búsqueda: <b className="ml-1">{q}</b>
+                          Búsqueda: <b className="ml-1">{searchQuery}</b>
                         </span>
                       )}
                       {selectedCategory !== "all" && (
@@ -191,23 +198,28 @@ export default function CatalogPage() {
 
             {/* Grid o estado vacío */}
             {filtered.length === 0 ? (
-              <div className="ui-card p-8">
-                <div className="text-lg font-semibold text-eafit-text">Sin resultados</div>
-                <div className="text-sm text-eafit-muted mt-1">
-                  Prueba otra búsqueda (Ctrl+K) o limpia los filtros.
+              <div className="ui-card p-10 flex flex-col items-center text-center gap-3">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-eafit-subtle border border-eafit-border text-eafit-muted">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="1.8"/>
+                    <path d="M16.5 16.5 21 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                    <path d="M8 10.5h5M10.5 8v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  </svg>
                 </div>
-                <div className="mt-4">
-                  <button className="ui-btn-primary" type="button" onClick={clearAll}>
-                    <span className="ui-btn-label">Limpiar filtros</span>
-                  </button>
+                <div>
+                  <div className="text-base font-semibold text-eafit-text">Sin resultados</div>
+                  <div className="text-sm text-eafit-muted mt-1">Prueba otra búsqueda (Ctrl+K) o limpia los filtros.</div>
                 </div>
+                <button className="ui-btn-primary ui-btn-sm mt-1" type="button" onClick={clearAll}>
+                  <span className="ui-btn-label">Limpiar filtros</span>
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6 xl:gap-7">
                 {filtered.map((r) => {
                   const availability = availabilityById.get(r.id) ?? "available";
                   const selected = draft.selectedIds.includes(r.id);
-                  const canAdd = canAddFromCatalog({ r, availabilityById });
+                  const canAdd = canAddFromCatalog(r, availabilityById);
 
                   return (
                     <ResourceCard
@@ -216,7 +228,7 @@ export default function CatalogPage() {
                       availability={availability}
                       selected={selected}
                       onToggle={() => toggleSelectedId(r.id, { canAdd })}
-                      onOpenDetail={() => openDetail(r.id)}
+                      onOpenDetail={() => setDetailResourceId(r.id)}
                     />
                   );
                 })}
@@ -226,25 +238,19 @@ export default function CatalogPage() {
         </div>
       </main>
 
-      <TicketBar count={draft.selectedIds.length} onGo={() => nav("/solicitud/nueva")} />
+      <TicketBar count={draft.selectedIds.length} onGo={() => navigate("/solicitud/nueva")} />
 
       <ResourceDetailModal
         open={!!detailResourceId}
-        onClose={closeDetail}
+        onClose={() => setDetailResourceId(null)}
         resource={detailResource}
         availability={detailResourceId ? availabilityById.get(detailResourceId) ?? "available" : "available"}
         selected={detailSelected}
         onToggle={() => {
           if (!detailResourceId) return;
-
           const r = resources.find((x) => x.id === detailResourceId);
           if (!r) return;
-
-          const a = availabilityById.get(r.id) ?? "available";
-          const effective = r.operationalStatus !== "active" ? "maintenance" : a;
-          const canAdd = effective === "available";
-
-          toggleSelectedId(detailResourceId, { canAdd });
+          toggleSelectedId(detailResourceId, { canAdd: canAddFromCatalog(r, availabilityById) });
         }}
       />
     </div>

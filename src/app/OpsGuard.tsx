@@ -1,5 +1,5 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth, isOpsRole } from "../auth/AuthContext";
 
 export default function OpsGuard() {
   const { isAuthed, user } = useAuth();
@@ -8,10 +8,7 @@ export default function OpsGuard() {
     return <Navigate to="/login" replace />;
   }
 
-  const role = user?.role;
-  const isOps = role === "practicante";
-
-  if (!isOps) {
+  if (!isOpsRole(user?.role)) {
     return <Navigate to="/" replace />;
   }
 

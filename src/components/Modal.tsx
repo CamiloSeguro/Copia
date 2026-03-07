@@ -15,8 +15,24 @@ const FOCUSABLE =
 function focusables(root: HTMLElement | null) {
   if (!root) return [];
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true"
+    (el) =>
+      !el.hasAttribute("disabled") &&
+      el.getAttribute("aria-hidden") !== "true" &&
+      // evita focusables invisibles
+      (el.offsetParent !== null || el === document.activeElement)
   );
+}
+
+function pickInitialFocus(panel: HTMLElement | null) {
+  if (!panel) return null;
+
+  // Prioriza campos del formulario (mejor UX)
+  const field = panel.querySelector<HTMLElement>(
+    'input:not([disabled]),textarea:not([disabled]),select:not([disabled])'
+  );
+  if (field) return field;
+
+  return focusables(panel)[0] ?? panel;
 }
 
 export function Modal({ open, title, children, onClose, footer }: Props) {
@@ -24,30 +40,60 @@ export function Modal({ open, title, children, onClose, footer }: Props) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const lastActiveRef = useRef<HTMLElement | null>(null);
 
+  // ✅ Mantén onClose estable para no re-disparar el effect de open
+  const onCloseRef = useRef(onClose);
   useEffect(() => {
-    if (!open) return;
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  // ✅ Para detectar transición closed -> open (y enfocar solo una vez)
+  const prevOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) {
+      prevOpenRef.current = false;
+      return;
+    }
+
+    // Solo correr “setup” cuando acaba de abrir
+    const justOpened = !prevOpenRef.current;
+    prevOpenRef.current = true;
 
     lastActiveRef.current = document.activeElement as HTMLElement | null;
 
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    const panel = panelRef.current;
+    const focusInitial = () => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      pickInitialFocus(panel)?.focus?.();
+    };
 
-    // focus inicial
-    requestAnimationFrame(() => {
-      const first = focusables(panel)[0] ?? panel;
-      first?.focus?.();
-    });
+    if (justOpened) {
+      requestAnimationFrame(focusInitial);
+    }
 
     const onKeyDown = (e: KeyboardEvent) => {
+      const panel = panelRef.current;
+      if (!panel) return;
+
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
-      if (e.key !== "Tab" || !panel) return;
+      if (e.key !== "Tab") return;
+
+      const active = document.activeElement as HTMLElement | null;
+      const isInside = active ? panel.contains(active) : false;
+
+      if (!isInside) {
+        e.preventDefault();
+        pickInitialFocus(panel)?.focus?.();
+        return;
+      }
 
       const els = focusables(panel);
       if (!els.length) {
@@ -58,25 +104,28 @@ export function Modal({ open, title, children, onClose, footer }: Props) {
 
       const first = els[0];
       const last = els[els.length - 1];
-      const active = document.activeElement;
 
-      if (e.shiftKey && active === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
+      if (e.shiftKey) {
+        if (active === first || active === panel) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (active === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
 
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, { capture: true });
 
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, { capture: true } as any);
       document.body.style.overflow = prevOverflow;
       lastActiveRef.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -86,7 +135,7 @@ export function Modal({ open, title, children, onClose, footer }: Props) {
       <button
         type="button"
         className="absolute inset-0 bg-black/40"
-        onClick={onClose}
+        onClick={() => onCloseRef.current()}
         aria-label="Cerrar"
       />
 
@@ -116,7 +165,7 @@ export function Modal({ open, title, children, onClose, footer }: Props) {
             <button
               type="button"
               className="ui-btn-ghost ui-btn-sm !h-9 !px-3 shrink-0"
-              onClick={onClose}
+              onClick={() => onCloseRef.current()}
               aria-label="Cerrar"
               title="Cerrar"
             >
@@ -129,7 +178,9 @@ export function Modal({ open, title, children, onClose, footer }: Props) {
 
           {/* Footer */}
           {footer ? (
-            <div className="px-6 py-4 border-t border-eafit-border bg-eafit-bg shrink-0">{footer}</div>
+            <div className="px-6 py-4 border-t border-eafit-border bg-eafit-bg shrink-0">
+              {footer}
+            </div>
           ) : null}
         </div>
       </div>

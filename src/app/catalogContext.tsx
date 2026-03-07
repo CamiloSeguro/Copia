@@ -81,7 +81,7 @@ export function CatalogProvider({
   initialResources?: Resource[];
 }) {
   const { user } = useAuth();
-  const canManage = user?.role === "practicante";
+  const canManage = user?.role === "trabajador" || user?.role === "admin";
 
   const [resources, setResources] = useState<Resource[]>(() => {
     const stored = safeParse<Resource[]>(localStorage.getItem(CATALOG_KEY), []);
@@ -95,7 +95,7 @@ export function CatalogProvider({
 
   const value = useMemo<CatalogContextValue>(() => {
     const assertOps = () => {
-      if (!canManage) throw new Error("No autorizado: solo practicantes pueden gestionar el catálogo.");
+      if (!canManage) throw new Error("No autorizado: solo trabajadores pueden gestionar el catálogo.");
     };
 
     const getById = (id: string) => resources.find((r) => r.id === id);
@@ -111,7 +111,6 @@ export function CatalogProvider({
           r.assetId,
           r.location ?? "",
           r.code ?? "",
-          r.description ?? "",
           ...(r.includes ?? []),
         ].join(" ");
 
@@ -135,7 +134,6 @@ export function CatalogProvider({
         imageUrl: cleanStr(input.imageUrl),
         location: cleanStr(input.location),
         code: cleanStr(input.code),
-        description: cleanStr(input.description),
       };
 
       setResources((prev) => [newItem, ...prev]);
@@ -158,8 +156,6 @@ export function CatalogProvider({
 
           if (typeof next.location === "string") next.location = cleanStr(next.location);
           if (typeof next.code === "string") next.code = cleanStr(next.code);
-          if (typeof next.description === "string") next.description = cleanStr(next.description);
-
           if (Array.isArray(next.includes)) next.includes = cleanList(next.includes);
 
           if (typeof next.imageUrl === "string") next.imageUrl = cleanStr(next.imageUrl);

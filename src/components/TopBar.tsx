@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
-import { mockResources } from "../data/mockResources";
+import { useAuth, isOpsRole } from "../auth/AuthContext";
+import { useCatalog } from "../app/catalogContext";
+import { useLoans, type Ticket } from "../app/loansContext";
+import { useUsers } from "../app/userContext";
 import type { Resource } from "../types";
 
 type CmdItem = {
@@ -10,8 +12,15 @@ type CmdItem = {
   hint?: string;
   to?: string;
   onRun?: () => void;
-  badge?: "Practicante" | "Usuario" | "Recurso" | "Buscar";
-  section?: "Páginas" | "Acciones" | "Recursos";
+  badge?: "Recurso" | "Buscar" | "Ticket" | "Persona";
+  section?: "Acciones" | "Recursos" | "Tickets" | "Personas";
+};
+
+const TICKET_STATUS_LABEL: Record<Ticket["status"], string> = {
+  pending_delivery: "Pendiente entrega",
+  delivered: "Entregado",
+  returned: "Devuelto",
+  cancelled: "Cancelado",
 };
 
 const LS_RECENT_RESOURCES = "eafit_recent_resources_v1";
@@ -45,7 +54,6 @@ function bumpRecent(resourceId: string) {
     next.unshift({ id: resourceId, ts: now, n: 1 });
   }
 
-  // Orden: más reciente primero
   next = next.sort((a, b) => b.ts - a.ts).slice(0, RECENT_MAX);
   saveRecent(next);
 }
@@ -167,7 +175,7 @@ function DropdownItem({ icon, label, onClick }: { icon: React.ReactNode; label: 
 
 function UserDropdown({ isOps }: { isOps: boolean }) {
   const { user, logout } = useAuth();
-  const nav = useNavigate();
+  const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -257,7 +265,7 @@ function UserDropdown({ isOps }: { isOps: boolean }) {
                       : "bg-eafit-secondary/10 border-eafit-secondary/20 text-eafit-text",
                   ].join(" ")}
                 >
-                  {isOps ? "Practicante" : "Usuario"}
+                  {user?.role === "admin" ? "Admin" : isOps ? "Trabajador" : "Usuario"}
                 </div>
                 <div className="text-sm font-semibold text-eafit-text truncate">{user?.name ?? "Cuenta"}</div>
                 <div className="text-xs text-eafit-muted truncate">{user?.email ?? ""}</div>
@@ -268,8 +276,8 @@ function UserDropdown({ isOps }: { isOps: boolean }) {
           <div className="p-1.5">
             {isOps && (
               <>
-                <DropdownItem icon={<Icons.Dashboard />} label="Dashboard" onClick={() => { setOpen(false); nav("/ops"); }} />
-                <DropdownItem icon={<Icons.List />} label="Solicitudes" onClick={() => { setOpen(false); nav("/ops/solicitudes"); }} />
+                <DropdownItem icon={<Icons.Dashboard />} label="Dashboard" onClick={() => { setOpen(false); navigate("/ops"); }} />
+                <DropdownItem icon={<Icons.List />} label="Solicitudes" onClick={() => { setOpen(false); navigate("/ops/solicitudes"); }} />
                 <div className="my-1 mx-2 h-px bg-eafit-border" />
               </>
             )}
@@ -342,19 +350,16 @@ function MobileMenu({ open, onClose, isOps }: { open: boolean; onClose: () => vo
   );
 }
 
-// CommandPalette (misma API; lo dejo igual pero sin useMemo)
 function CommandPalette({
   open,
   onClose,
-  items,
   dynamicItems,
 }: {
   open: boolean;
   onClose: () => void;
-  items: CmdItem[];
-  dynamicItems?: (q: string) => CmdItem[];
+  dynamicItems: (q: string) => CmdItem[];
 }) {
-  const nav = useNavigate();
+  const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
 
@@ -362,11 +367,7 @@ function CommandPalette({
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const allItems = [...(dynamicItems ? dynamicItems(q) : []), ...items];
-  const s = q.trim().toLowerCase();
-  const filtered = !s
-    ? allItems
-    : allItems.filter((it) => `${it.label} ${it.hint ?? ""} ${it.id}`.toLowerCase().includes(s));
+  const filtered = dynamicItems(q);
 
   useEffect(() => {
     if (!open) return;
@@ -386,24 +387,23 @@ function CommandPalette({
 
   if (!open) return null;
 
-const run = (it: CmdItem) => {
-  // ✅ Si es un recurso, guardarlo como reciente
-  if (it.badge === "Recurso" && it.id.startsWith("resource-")) {
-    const rid = it.id.replace("resource-", "");
-    bumpRecent(rid);
-  }
-
-  it.onRun?.();
-  if (it.to) nav(it.to);
-  onClose();
-};
+  const run = (it: CmdItem) => {
+    if (it.badge === "Recurso" && it.id.startsWith("resource-")) {
+      bumpRecent(it.id.replace("resource-", ""));
+    }
+    it.onRun?.();
+    if (it.to) navigate(it.to);
+    onClose();
+  };
 
   const badgeCls = (b?: CmdItem["badge"]) => {
     switch (b) {
-      case "Practicante":
-        return "border-eafit-primary/20 bg-eafit-primary/8 text-eafit-primary";
       case "Recurso":
         return "border-status-info/25 bg-status-info/10 text-status-info";
+      case "Ticket":
+        return "border-status-warning/25 bg-status-warning/10 text-status-warning";
+      case "Persona":
+        return "border-eafit-primary/20 bg-eafit-primary/8 text-eafit-primary";
       case "Buscar":
         return "border-eafit-border bg-eafit-bg text-eafit-muted";
       default:
@@ -442,7 +442,7 @@ const run = (it: CmdItem) => {
                 onChange={(e) => { setQ(e.target.value); setActive(0); }}
                 className="w-full h-11 rounded-lg border border-eafit-border bg-eafit-bg pl-10 pr-16 text-sm outline-none
                            focus:ring-2 focus:ring-eafit-secondary/20 focus:border-eafit-secondary/30"
-                placeholder="Buscar recursos, páginas…"
+                placeholder="Buscar por ID, nombre, categoría…"
                 aria-controls="cmd-results"
               />
               <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-eafit-muted border border-eafit-border rounded-md px-2 py-1 bg-eafit-surface font-sans">
@@ -459,55 +459,55 @@ const run = (it: CmdItem) => {
               </div>
             ) : (
               <div className="p-2 space-y-2">
-  {filtered.map((it, idx) => {
-    const isActive = idx === active;
-    const prev = filtered[idx - 1];
-    const showHeader = it.section && it.section !== prev?.section;
+                {filtered.map((it, idx) => {
+                  const isActive = idx === active;
+                  const prev = filtered[idx - 1];
+                  const showHeader = it.section && it.section !== prev?.section;
 
-    return (
-      <div key={it.id} className="space-y-1">
-        {showHeader && (
-          <div className="px-3 pt-2 pb-1">
-            <div className="text-[10px] font-semibold tracking-wide uppercase text-eafit-muted">
-              {it.section}
-            </div>
-            <div className="mt-2 h-px bg-eafit-border" />
-          </div>
-        )}
+                  return (
+                    <div key={it.id} className="space-y-1">
+                      {showHeader && (
+                        <div className="px-3 pt-2 pb-1">
+                          <div className="text-[10px] font-semibold tracking-wide uppercase text-eafit-muted">
+                            {it.section}
+                          </div>
+                          <div className="mt-2 h-px bg-eafit-border" />
+                        </div>
+                      )}
 
-        <button
-          data-idx={idx}
-          role="option"
-          aria-selected={isActive}
-          onMouseEnter={() => setActive(idx)}
-          onClick={() => run(it)}
-          className={[
-            "w-full text-left px-4 py-2.5 rounded-lg flex items-center justify-between gap-4 transition",
-            isActive ? "bg-eafit-secondary/8 border border-eafit-secondary/20" : "border border-transparent hover:bg-eafit-bg",
-          ].join(" ")}
-        >
-          <div className="min-w-0 flex items-center gap-3">
-            {it.badge && (
-              <span className={["shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border", badgeCls(it.badge)].join(" ")}>
-                {it.badge}
-              </span>
-            )}
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-eafit-text truncate">{it.label}</div>
-              {it.hint && <div className="text-xs text-eafit-muted mt-0.5 truncate">{it.hint}</div>}
-            </div>
-          </div>
+                      <button
+                        data-idx={idx}
+                        role="option"
+                        aria-selected={isActive}
+                        onMouseEnter={() => setActive(idx)}
+                        onClick={() => run(it)}
+                        className={[
+                          "w-full text-left px-4 py-2.5 rounded-lg flex items-center justify-between gap-4 transition",
+                          isActive ? "bg-eafit-secondary/8 border border-eafit-secondary/20" : "border border-transparent hover:bg-eafit-bg",
+                        ].join(" ")}
+                      >
+                        <div className="min-w-0 flex items-center gap-3">
+                          {it.badge && (
+                            <span className={["shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border", badgeCls(it.badge)].join(" ")}>
+                              {it.badge}
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-eafit-text truncate">{it.label}</div>
+                            {it.hint && <div className="text-xs text-eafit-muted mt-0.5 truncate">{it.hint}</div>}
+                          </div>
+                        </div>
 
-          {isActive && (
-            <kbd className="shrink-0 text-[10px] text-eafit-muted border border-eafit-border rounded px-1.5 py-0.5 bg-eafit-surface font-sans">
-              ↵
-            </kbd>
-          )}
-        </button>
-      </div>
-    );
-  })}
-</div>
+                        {isActive && (
+                          <kbd className="shrink-0 text-[10px] text-eafit-muted border border-eafit-border rounded px-1.5 py-0.5 bg-eafit-surface font-sans">
+                            ↵
+                          </kbd>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 
@@ -531,9 +531,12 @@ const run = (it: CmdItem) => {
 
 export function Topbar() {
   const { isAuthed, user } = useAuth();
-  const nav = useNavigate();
+  const { resources } = useCatalog();
+  const { tickets } = useLoans();
+  const { users } = useUsers();
+  const navigate = useNavigate();
 
-  const isOps = isAuthed && user?.role === "practicante";
+  const isOps = isAuthed && isOpsRole(user?.role);
 
   const [openCmd, setOpenCmd] = useState(false);
   const [openMobile, setOpenMobile] = useState(false);
@@ -541,72 +544,112 @@ export function Topbar() {
   const toggleCmd = () => setOpenCmd((v) => !v);
   useHotkeys(openCmd, toggleCmd, () => setOpenCmd(false));
 
-  const cmdItems: CmdItem[] = isOps
-    ? [
-        { id: "ops-home", label: "Dashboard", hint: "Vista operativa del laboratorio", to: "/ops",  section: "Páginas" },
-        { id: "ops-reqs", label: "Solicitudes", hint: "Gestión de tickets activos", to: "/ops/solicitudes", section: "Páginas" },
-      ]
-    : [
-        { id: "home", label: "Catálogo", hint: "Explorar recursos disponibles", to: "/",  section: "Páginas" },
-      ];
+  const dynamicItems = (q: string): CmdItem[] => {
+    const term = q.trim();
+    const low = term.toLowerCase();
 
-  const dynamicItems = !isOps
-  ? (q: string): CmdItem[] => {
-      const term = q.trim();
-      const low = term.toLowerCase();
-
-      // ✅ SIN búsqueda: mostrar Recientes primero
+    if (isOps) {
       if (!term) {
-        const recentIds = loadRecent().map((x) => x.id);
+        const recentTickets = [...tickets]
+          .sort((a, b) => b.createdAtISO.localeCompare(a.createdAtISO))
+          .slice(0, 4)
+          .map((t) => ({
+            id: `ticket-${t.id}`,
+            label: t.id,
+            hint: t.userName ? `${t.userName} · ${TICKET_STATUS_LABEL[t.status]}` : TICKET_STATUS_LABEL[t.status],
+            to: `/ops/ticket/${t.id}`,
+            badge: "Ticket" as const,
+            section: "Tickets" as const,
+          }));
 
-        const byId = new Map(mockResources.map((r: Resource) => [r.id, r]));
-        const recentResources = recentIds
-          .map((id) => byId.get(id))
-          .filter(Boolean) as Resource[];
-
-        const fallback = mockResources
-          .filter((r: Resource) => !recentIds.includes(r.id))
-          .slice(0, Math.max(0, 8 - recentResources.length));
-
-        const base = [...recentResources, ...fallback].slice(0, 8);
-
-        return base.map((r: Resource) => ({
-          id: `resource-${r.id}`,
-          label: `${r.assetId ?? "—"} · ${r.name}`,
-          hint: r.category,
-          to: `/?q=${encodeURIComponent(r.assetId ?? r.name)}`,
-          badge: "Recurso" as const,
-          section: "Recursos" as const,
+        const recentUsers = users.slice(0, 4).map((u) => ({
+          id: `user-${u.id}`,
+          label: u.name,
+          hint: u.email,
+          to: `/ops/usuarios`,
+          badge: "Persona" as const,
+          section: "Personas" as const,
         }));
+
+        return [...recentTickets, ...recentUsers];
       }
 
-      // ✅ CON búsqueda: acción + hits
-      const apply: CmdItem = {
-        id: `apply-${low}`,
-        label: `Buscar: "${term}"`,
-        hint: "Filtra el catálogo",
-        to: `/?q=${encodeURIComponent(term)}`,
-        badge: "Buscar",
-        section: "Acciones",
-      };
-
-      const hits = mockResources
-        .filter((r: Resource) =>
-          `${r.assetId ?? ""} ${r.name} ${r.category} ${r.id}`.toLowerCase().includes(low)
+      const ticketHits = tickets
+        .filter((t) =>
+          t.id.toLowerCase().includes(low) ||
+          TICKET_STATUS_LABEL[t.status].toLowerCase().includes(low) ||
+          (t.userName ?? "").toLowerCase().includes(low) ||
+          (t.userEmail ?? "").toLowerCase().includes(low)
         )
-        .slice(0, 8)
-        .map((r: Resource) => ({
-          id: `resource-${r.id}`,
-          label: `${r.assetId ?? "—"} · ${r.name}`,
-          hint: r.category,
-          to: `/?q=${encodeURIComponent(r.assetId ?? r.name)}`,
-          badge: "Recurso" as const,
-          section: "Recursos" as const,
+        .slice(0, 4)
+        .map((t) => ({
+          id: `ticket-${t.id}`,
+          label: t.id,
+          hint: t.userName ? `${t.userName} · ${TICKET_STATUS_LABEL[t.status]}` : TICKET_STATUS_LABEL[t.status],
+          to: `/ops/ticket/${t.id}`,
+          badge: "Ticket" as const,
+          section: "Tickets" as const,
         }));
 
-      return [apply, ...hits];
+      const userHits = users
+        .filter((u) => `${u.name} ${u.email}`.toLowerCase().includes(low))
+        .slice(0, 4)
+        .map((u) => ({
+          id: `user-${u.id}`,
+          label: u.name,
+          hint: u.email,
+          to: `/ops/usuarios`,
+          badge: "Persona" as const,
+          section: "Personas" as const,
+        }));
+
+      return [...ticketHits, ...userHits];
     }
-  : undefined;
+
+    // Usuario normal: búsqueda de recursos
+    if (!term) {
+      const recentIds = loadRecent().map((x) => x.id);
+      const byId = new Map(resources.map((r: Resource) => [r.id, r]));
+      const recentResources = recentIds.map((id) => byId.get(id)).filter(Boolean) as Resource[];
+      const fallback = resources
+        .filter((r: Resource) => !recentIds.includes(r.id))
+        .slice(0, Math.max(0, 8 - recentResources.length));
+
+      return [...recentResources, ...fallback].slice(0, 8).map((r: Resource) => ({
+        id: `resource-${r.id}`,
+        label: `${r.assetId ?? "—"} · ${r.name}`,
+        hint: r.category,
+        to: `/?q=${encodeURIComponent(r.assetId ?? r.name)}`,
+        badge: "Recurso" as const,
+        section: "Recursos" as const,
+      }));
+    }
+
+    const apply: CmdItem = {
+      id: `apply-${low}`,
+      label: `Buscar: "${term}"`,
+      hint: "Filtra el catálogo",
+      to: `/?q=${encodeURIComponent(term)}`,
+      badge: "Buscar",
+      section: "Acciones",
+    };
+
+    const hits = resources
+      .filter((r: Resource) =>
+        `${r.assetId ?? ""} ${r.name} ${r.category} ${r.id}`.toLowerCase().includes(low)
+      )
+      .slice(0, 8)
+      .map((r: Resource) => ({
+        id: `resource-${r.id}`,
+        label: `${r.assetId ?? "—"} · ${r.name}`,
+        hint: r.category,
+        to: `/?q=${encodeURIComponent(r.assetId ?? r.name)}`,
+        badge: "Recurso" as const,
+        section: "Recursos" as const,
+      }));
+
+    return [apply, ...hits];
+  };
 
   return (
     <>
@@ -619,12 +662,12 @@ export function Topbar() {
         {isOps && <div className="h-[3px] bg-eafit-primary w-full" />}
 
         <div className="mx-auto max-w-content px-4 sm:px-6 lg:px-10 h-[65px] flex items-center gap-3 sm:gap-4">
-          <Logo to={isOps ? "/ops" : "/"} subtitle={isOps ? "Panel de practicante" : "Préstamo de recursos"} />
+          <Logo to={isOps ? "/ops" : "/"} subtitle={isOps ? "Panel de trabajador" : "Préstamo de recursos"} />
 
           <div className="flex-1 min-w-0">
             <button
               type="button"
-              onClick={() => (!isAuthed ? nav("/login") : setOpenCmd(true))}
+              onClick={() => (!isAuthed ? navigate("/login") : setOpenCmd(true))}
               className={[
                 "w-full h-10 rounded-input border bg-eafit-bg px-3.5 flex items-center justify-between gap-3",
                 "hover:bg-eafit-subtle transition focus:outline-none focus:ring-2 focus:ring-eafit-secondary/20",
@@ -633,7 +676,7 @@ export function Topbar() {
             >
               <div className="flex items-center gap-2.5 text-eafit-muted min-w-0">
                 <Icons.Search />
-                <span className="text-sm truncate">{isOps ? "Ir a… (Ctrl K)" : "Buscar por ID, nombre, categoría…"}</span>
+                <span className="text-sm truncate">Buscar por ID, nombre, categoría… (Ctrl K)</span>
               </div>
               <kbd className="hidden md:inline text-[11px] text-eafit-muted border border-eafit-border rounded px-2 py-0.5 bg-eafit-surface shrink-0 font-sans">
                 Ctrl K
@@ -691,7 +734,7 @@ export function Topbar() {
       </header>
 
       <MobileMenu open={openMobile} onClose={() => setOpenMobile(false)} isOps={!!isOps} />
-      <CommandPalette open={openCmd} onClose={() => setOpenCmd(false)} items={cmdItems} dynamicItems={dynamicItems} />
+      <CommandPalette open={openCmd} onClose={() => setOpenCmd(false)} dynamicItems={dynamicItems} />
     </>
   );
 }

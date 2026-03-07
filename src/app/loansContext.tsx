@@ -7,6 +7,7 @@ export type TicketStatus = "pending_delivery" | "delivered" | "returned" | "canc
 export type TicketItem = {
   id: string;
   resourceId: string;
+  quantity: number;
   status: "pending" | "delivered" | "returned" | "cancelled";
   deliveredAtISO?: string;
   dueAtISO?: string;        // ✅ propiedad (opcional)
@@ -18,6 +19,10 @@ export type Ticket = {
   createdAtISO: string;
   type: "immediate";
 
+  userId: string;
+  userName: string;
+  userEmail: string;
+
   startDateISO?: string; // YYYY-MM-DD
   startTime?: string; // HH:MM
 
@@ -26,13 +31,15 @@ export type Ticket = {
   notes?: string;
 };
 
-const TICKETS_KEY = "eafit_loans_tickets_v4";
+const TICKETS_KEY = "eafit_loans_tickets_v5";
+
+type TicketUser = { id: string; name: string; email: string };
 
 type LoansContextValue = {
   tickets: Ticket[];
   getTicket: (ticketId: string) => Ticket | undefined;
 
-  createTicketFromDraft: (draft: TicketDraft) => Ticket;
+  createTicketFromDraft: (draft: TicketDraft, user: TicketUser) => Ticket;
   updateTicket: (
     ticketId: string,
     patch: Partial<Pick<Ticket, "startDateISO" | "startTime" | "notes">> & { selectedIds?: string[] }
@@ -78,11 +85,15 @@ export function LoansProvider({ children }: { children: React.ReactNode }) {
 
   const getTicket = (ticketId: string) => tickets.find((t) => t.id === ticketId);
 
-  const createTicketFromDraft = (draft: TicketDraft) => {
+  const createTicketFromDraft = (draft: TicketDraft, user: TicketUser) => {
     const ticket: Ticket = {
       id: uid("ticket"),
       createdAtISO: nowISO(),
       type: "immediate",
+
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
 
       startDateISO: draft.startDateISO,
       startTime: draft.startTime,
@@ -93,6 +104,7 @@ export function LoansProvider({ children }: { children: React.ReactNode }) {
       items: draft.selectedIds.map((resourceId) => ({
         id: uid("item"),
         resourceId,
+        quantity: draft.quantities?.[resourceId] ?? 1,
         status: "pending",
       })),
     };
